@@ -1,0 +1,25 @@
+{
+  "name": "remotion-web-app",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @app/editor --filter @app/server dev",
+    "dev:editor": "pnpm --filter @app/editor dev",
+    "dev:server": "pnpm --filter @app/server dev",
+    "build": "pnpm --filter @app/editor build",
+    "start": "pnpm --filter @app/server start",
+    "typecheck": "pnpm -r typecheck",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

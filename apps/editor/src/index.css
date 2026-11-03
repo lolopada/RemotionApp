@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* Palette de l'éditeur (sombre, pour que la vidéo ressorte). */
+@theme {
+  --color-canvas: #0b0d12;
+  --color-panel: #14171f;
+  --color-panel-hover: #1e2230;
+  --color-line: #262b38;
+  --color-ink: #e8eaf0;
+  --color-ink-muted: #9aa1b2;
+  --color-ink-faint: #646b7d;
+  --color-accent: #7c5cff;
+  --color-accent-hover: #6a48ff;
+  --color-accent-soft: #7c5cff26;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Barres de défilement discrètes */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+input[type="number"]::-webkit-inner-spin-button {
+  opacity: 0.4;
+}
