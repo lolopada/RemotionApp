@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   Image,
+  LayoutTemplate,
   Lock,
   Shapes,
   Type,
@@ -17,6 +18,7 @@ import {
 import { useState } from "react";
 import { Button, Field, IconButton, NumberInput, Section, Select, TextInput } from "../../components/ui";
 import { useEditor, useProject } from "../../store/editorStore";
+import { useLayoutWizard } from "../layouts/wizardStore";
 import { useMyTemplates } from "../library/useMyTemplates";
 import { BackgroundEditor } from "./BackgroundEditor";
 
@@ -27,10 +29,18 @@ export function SceneInspector({ scene }: { scene: Scene }) {
   const { updateScene, selectLayer, moveLayer, updateLayer, applyTransitionToAll } = useEditor.getState();
   const isFirst = project.scenes[0]?.id === scene.id;
   const update = (fn: (s: Scene) => void) => updateScene(scene.id, fn);
+  const openWizard = useLayoutWizard((s) => s.open);
 
   return (
     <div>
       <Section title="Scène">
+        <button
+          type="button"
+          onClick={() => openWizard({ mode: "relayout", sceneId: scene.id })}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-accent-soft px-2 py-1.5 text-xs text-ink transition hover:bg-accent hover:text-white"
+        >
+          <LayoutTemplate size={13} /> Changer de mise en page
+        </button>
         <Field label="Nom">
           <TextInput value={scene.name} onChange={(v) => update((s) => void (s.name = v))} />
         </Field>

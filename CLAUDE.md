@@ -93,6 +93,29 @@ Le CSS supporté est limité : https://www.remotion.dev/docs/client-side-renderi
   même sur un calque tourné, rotation, aimantation, curseurs). `SelectionOverlay.tsx` ne fait que
   brancher la souris dessus ; les poignées vivent dans le repère (tourné) du calque.
 
+## Forme d'onde et piste audio
+
+- `lib/waveform.ts` : pics calculés dans le navigateur (`decodeAudioData` sur un
+  `OfflineAudioContext` à 8 kHz pour rester léger), mis en cache par URL ; calcul pur et testé.
+  `components/WaveformCanvas.tsx` la dessine, `WaveformPicker.tsx` sert aux réglages.
+- `features/storyboard/audioEdit.ts` : déplacer / couper un morceau (pur, testé). Couper un bord
+  change `startFrame`, `durationInFrames` ET `trimStartFrames` ensemble ; la fin est plafonnée à
+  la longueur du fichier.
+
+## Nouvelle page : propositions de mise en page (`apps/editor/src/features/layouts/`)
+
+- Pur et testé (`layouts.test.ts`) : `content.ts` (contenu, rôles des textes, `sceneToContent`
+  pour « Changer de mise en page »), `fit.ts` (zones, grilles, photo/polaroid logés dans une
+  case, police qui fait tenir une pile de textes **sans couper de mot**), `builder.ts`
+  (`PageBuilder` : pose photos/textes/aplats aux couleurs du thème, note, animations ; les
+  6 `LAYOUT_STYLES`), `library.ts` (`LAYOUTS`), `propose.ts` (classement + « tours » de styles).
+- Une disposition ne pose que des calques existants : rien de nouveau à exporter. Elle ne doit
+  pas sortir de l'image (le test le vérifie pour tous les formats), sauf un décor nommé « … déborde ».
+- Les textes posés sur plusieurs lignes n'utilisent jamais `box` (export) : un aplat
+  (`addPanel`) est placé derrière.
+- `relayoutScene` remplace calques + fond et garde id, nom (sauf nom automatique), durée,
+  transition. Le contenu relu garde l'ordre des photos (la mise en avant reste n° 1).
+
 ## Ajouter un type de calque
 
 schéma (`layers.ts`) → rendu (`composition/src/layers/registry.tsx`) → réglages

@@ -6,6 +6,7 @@ import { ArrowRightLeft, Copy, Plus, Trash2 } from "lucide-react";
 import { memo, useState } from "react";
 import { IconButton } from "../../components/ui";
 import { useEditor, useProject } from "../../store/editorStore";
+import { useLayoutWizard } from "../layouts/wizardStore";
 import { AudioStrip } from "./AudioStrip";
 
 const THUMB_HEIGHT = 72;
@@ -18,7 +19,8 @@ const THUMB_HEIGHT = 72;
 export function Storyboard() {
   const project = useProject();
   const selectedSceneId = useEditor((s) => s.selectedSceneId);
-  const { selectScene, addScene, duplicateScene, removeScene, moveScene } = useEditor.getState();
+  const { selectScene, duplicateScene, removeScene, moveScene } = useEditor.getState();
+  const openWizard = useLayoutWizard((s) => s.open);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const thumbWidth = Math.round((THUMB_HEIGHT * project.width) / project.height);
@@ -111,7 +113,7 @@ export function Storyboard() {
         ))}
         <button
           type="button"
-          onClick={() => addScene(undefined, project.scenes.at(-1)?.id)}
+          onClick={() => openWizard({ mode: "new", afterId: project.scenes.at(-1)?.id })}
           onDragOver={(e) => {
             if (!dragId) return;
             e.preventDefault();
@@ -120,7 +122,8 @@ export function Storyboard() {
           onDrop={() => onDrop(project.scenes.length)}
           className="ml-2 flex shrink-0 items-center justify-center rounded-md border border-line border-dashed text-ink-faint transition hover:border-accent hover:text-accent"
           style={{ width: thumbWidth, height: THUMB_HEIGHT }}
-          title="Ajouter une scène"
+          title="Nouvelle page"
+          aria-label="Nouvelle page"
         >
           <Plus size={18} />
         </button>

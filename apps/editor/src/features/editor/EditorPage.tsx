@@ -4,6 +4,7 @@ import { navigate } from "../../lib/router";
 import { useProjectSync } from "../../store/useProjectSync";
 import { useShortcuts } from "../../store/useShortcuts";
 import { InspectorPanel } from "../inspector/InspectorPanel";
+import { LayoutWizard } from "../layouts/LayoutWizard";
 import { LibraryPanel } from "../library/LibraryPanel";
 import { PreviewStage } from "../preview/PreviewStage";
 import { Storyboard } from "../storyboard/Storyboard";
@@ -55,6 +56,7 @@ export function EditorPage({ projectId }: { projectId: string }) {
         <InspectorPanel />
       </div>
       <Storyboard />
+      <LayoutWizard />
     </div>
   );
 }

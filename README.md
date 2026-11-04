@@ -56,6 +56,7 @@ apps/
       features/
         preview/     Aperçu : <Player>, sélection/déplacement, Smart Drop, lecture
         storyboard/  Vignettes des scènes (réordonner, dupliquer) + piste audio
+        layouts/     « Nouvelle page » : contenu → propositions de mise en page
         library/     Panneau gauche : modèles, éléments, photos, fonds, musique
         inspector/   Panneau droit : réglages scène / calque / musique
         export/      Export MP4 dans le navigateur, puis envoi au serveur
@@ -151,6 +152,26 @@ avec centre et taille réglables), motif (pois, rayures, damier, quadrillage), o
 (flou + voile coloré plein / dégradé / vignette). Tous peuvent recevoir un grain de
 pellicule, et être animés (dégradé qui ondule, motif qui défile, zoom lent sur la photo).
 Une trentaine de préréglages sont dans l'onglet Fonds, avec aperçu animé au survol.
+
+### Nouvelle page et « Changer de mise en page »
+
+Le **+** du storyboard ouvre la fenêtre « Nouvelle page » : on y pose jusqu'à 6 photos ou
+vidéos (import, glisser-déposer ou bibliothèque du compte) et jusqu'à 3 textes. Le rôle de
+chaque texte est deviné (le premier texte court est le titre, un second court le sous-titre,
+les longs du texte courant) et peut être forcé. Le site propose aussitôt des mises en page,
+jouées en boucle par la composition : une bibliothèque d'une vingtaine de dispositions
+(pleine page, moitié-moitié, médaillon, arche, polaroids, grilles, bandes, mosaïques, une
+grande et des vignettes…) croisées avec 6 styles (fond, habillage des photos, animations
+d'entrée). Elles sont classées selon le contenu : photos peu rognées (ratio de la photo
+proche de celui du cadre), textes lisibles sans couper de mot. « Autres idées » fait défiler
+les suivantes ; « Page vide » reste possible. La page choisie est une scène normale, aux
+couleurs du thème du projet, entièrement modifiable.
+
+**Changer de mise en page** (panneau de la scène) rouvre la même fenêtre avec le contenu de la
+scène (photos, vidéos et textes ; formes et stickers sont laissés de côté) et remplace sa
+disposition en gardant son nom, sa durée et sa transition. Rien n'est recadré automatiquement :
+les photos sont centrées, à ajuster ensuite si besoin. Ajouter une disposition = une entrée
+dans `apps/editor/src/features/layouts/library.ts`.
 
 ### Projet : thème, modèles, format
 
