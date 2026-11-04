@@ -2,19 +2,23 @@
 
 ## Installation rapide (conteneur Debian/Ubuntu, derrière Nginx Proxy Manager)
 
-Copie le dépôt dans la CT (par exemple `rsync -a --exclude node_modules --exclude dist --exclude data ./ root@IP-CT:/root/montage-src/`),
-puis, **dans la CT, en root** :
+Dans la CT, **en root** (dépôt : <https://github.com/lolopada/RemotionApp.git>) :
 
 ```bash
+apt update && apt install -y git
+git clone https://github.com/lolopada/RemotionApp.git /root/montage-src
 cd /root/montage-src
 ./deploy/install.sh --domain montage.paada.fr
 ```
 
+Si le dépôt est privé, ajoute une clé de déploiement (Settings → Deploy keys) et clone avec
+`git@github.com:lolopada/RemotionApp.git`, ou utilise un jeton d'accès personnel avec l'URL HTTPS.
+
 Le script installe Node ≥ 22.13 et pnpm si besoin, crée l'utilisateur `montage`, construit l'éditeur,
 écrit `/etc/montage.env`, installe le service systemd et la sauvegarde quotidienne (03h30, 14 jours
-gardés), puis vérifie que l'API répond. **Pour mettre à jour : recopie le nouveau code et relance la
-même commande** (sauvegarde automatique avant, configuration et données conservées).
-Options : `--source DIR`, `--port N`, `--data-dir DIR`, `--closed` (inscriptions fermées dès le départ).
+gardés), puis vérifie que l'API répond. **Pour mettre à jour : `cd /root/montage-src && ./deploy/install.sh --pull`**
+(`git pull` puis réinstallation ; sauvegarde automatique avant, configuration et données conservées).
+Options : `--pull`, `--source DIR`, `--port N`, `--data-dir DIR`, `--closed` (inscriptions fermées dès le départ).
 
 Réglages de Nginx Proxy Manager (Proxy Host → SSL : Let's Encrypt, Force SSL, HTTP/2 ; onglet _Advanced_) :
 
