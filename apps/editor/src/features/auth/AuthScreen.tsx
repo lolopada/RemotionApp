@@ -3,6 +3,7 @@ import { LoaderCircle } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { Logo } from "../../components/Logo";
 import { api } from "../../lib/api";
+import { BUILD, formatBuild } from "../../lib/version";
 import { useAuth } from "../../store/authStore";
 
 /** Connexion / inscription : juste un nom d'utilisateur et un mot de passe. */
@@ -129,6 +130,7 @@ export function AuthScreen() {
             </button>
           </form>
         </div>
+        <p className="mt-4 text-center text-[11px] text-ink-faint tabular-nums">Montage {formatBuild(BUILD)}</p>
       </div>
     </div>
   );

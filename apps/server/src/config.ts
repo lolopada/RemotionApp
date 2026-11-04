@@ -7,6 +7,8 @@ const env = process.env;
 
 /** Toute la configuration passe par des variables d'environnement. */
 export const config = {
+  /** Racine du dépôt (package.json avec le numéro de version). */
+  repoRoot,
   port: Number(env.PORT ?? 3001),
   host: env.HOST ?? "0.0.0.0",
   isProduction: env.NODE_ENV === "production",

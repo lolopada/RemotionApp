@@ -123,6 +123,13 @@ schéma (`layers.ts`) → rendu (`composition/src/layers/registry.tsx`) → rég
 champs px dans `resizeLayer` / frames dans `retimeScene`. TypeScript signale la plupart des oublis
 (pas `resizeLayer` ni `retimeScene` : à vérifier à la main).
 
+## Numéro de version
+
+`version` du `package.json` racine + commit (`MONTAGE_COMMIT`, posé par `deploy/install.sh`, sinon
+`git`) + date : calculés dans `apps/editor/vite.config.ts` (`__BUILD_INFO__` + `dist/version.json`),
+relus par le serveur (`buildInfo.ts`) et renvoyés par `/api/health`. `lib/version.ts` les affiche et
+compare avec le serveur (« Nouvelle version »). Augmenter `version` à chaque étape notable.
+
 ## Vérifier avant de terminer
 
 ```bash

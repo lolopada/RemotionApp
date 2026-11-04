@@ -23,6 +23,36 @@ echo "Réponse HTTP"
 curl -fsS -m 5 "http://127.0.0.1:$PORT/api/health" | grep -q '"ok":true' && ok "API (port $PORT)" || bad "l'API ne répond pas sur le port $PORT"
 curl -fsS -m 5 "http://127.0.0.1:$PORT/" | grep -qi 'id="root"' && ok "éditeur servi" || bad "l'éditeur n'est pas servi (build manquant ?)"
 
+echo "Version"
+json_field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -n1; }
+health="$(curl -fsS -m 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)"
+sv="$(echo "$health" | json_field version)"; sc="$(echo "$health" | json_field commit)"; sb="$(echo "$health" | json_field builtAt)"
+if [[ -n "$sv" ]]; then
+  ok "en ligne : v$sv · $sc${sb:+ · construite le $(date -d "$sb" '+%d/%m/%Y %H:%M' 2>/dev/null || echo "$sb")}"
+else
+  warn "version inconnue (serveur arrêté, ou installé avant l'ajout du numéro de version)"
+fi
+src="$(cat /srv/montage/source-path 2>/dev/null || true)"
+if [[ -n "$src" && -d "$src/.git" ]] && command -v git >/dev/null; then
+  lc="$(git -C "$src" rev-parse --short HEAD 2>/dev/null)"
+  [[ -n "$(git -C "$src" status --porcelain 2>/dev/null)" ]] && lc="$lc+modifs"
+  if [[ "$lc" == "$sc" ]]; then ok "dépôt $src : même commit ($lc)"
+  else warn "dépôt $src à $lc, mais $sc en ligne : relance  cd $src && ./deploy/install.sh"; fi
+  if ! git -C "$src" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+    warn "le dépôt ne suit pas de branche GitHub : vérification des nouveautés ignorée"
+  elif GIT_TERMINAL_PROMPT=0 timeout 15 git -C "$src" fetch -q 2>/dev/null; then
+    behind="$(git -C "$src" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)"
+    if [[ "${behind:-0}" -gt 0 ]]; then
+      warn "$behind nouveau(x) commit(s) sur GitHub pas encore installé(s) :  cd $src && ./deploy/install.sh --pull"
+      git -C "$src" log --oneline 'HEAD..@{u}' 2>/dev/null | head -n 5 | sed 's/^/      /'
+    else
+      ok "à jour avec GitHub"
+    fi
+  else
+    warn "GitHub injoignable : impossible de vérifier s'il y a du nouveau"
+  fi
+fi
+
 echo "Node"
 v="$(node -p 'process.versions.node' 2>/dev/null || echo 0)"
 [[ "$(printf '%s\n22.13.0\n' "$v" | sort -V | head -n1)" == "22.13.0" ]] && ok "Node $v" || bad "Node $v < 22.13.0"

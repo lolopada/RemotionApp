@@ -203,7 +203,8 @@ TypeScript refuse de compiler tant qu'une de ces trois étapes manque.
 ## Déploiement
 
 `deploy/install.sh` installe tout dans une CT Debian/Ubuntu (Node, service systemd, sauvegardes), `deploy/smoke-test.mjs`
-test l'instance de production de bout en bout, `montage-doctor` contrôle sa santé. Voir `docs/deploiement.md`.
+test l'instance de production de bout en bout, `montage-doctor` contrôle sa santé. Mise à jour : `./deploy/install.sh --pull`.
+La version en ligne (`v1.0.0 · commit · date`) s'affiche en bas de l'accueil et via `/api/health`. Voir `docs/deploiement.md`.
 
 ## Comptes et sauvegarde
 

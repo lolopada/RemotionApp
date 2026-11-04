@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { createAccounts } from "./auth/accounts";
 import { type AppEnv, requireUser, sameOrigin } from "./auth/middleware";
+import type { BuildInfo } from "./buildInfo";
 import type { AppConfig } from "./config";
 import { openDb } from "./db";
 import { authRoutes } from "./routes/auth";
@@ -32,7 +33,7 @@ export function createApp(
     | "versionIntervalMs"
     | "maxAutoVersions"
   >,
-  opts: { log?: boolean } = {},
+  opts: { log?: boolean; buildInfo?: BuildInfo } = {},
 ) {
   const db = openDb(path.join(config.dataDir, "montage.db"));
   const filesDir = path.join(config.dataDir, "files");
@@ -48,7 +49,12 @@ export function createApp(
   if (opts.log) app.use(logger());
   app.use("/api/*", sameOrigin);
 
-  app.get("/api/health", (c) => c.json({ ok: true }));
+  // Public : sert au contrôle de santé et à savoir quelle version est en ligne.
+  const build = opts.buildInfo ?? { version: "0.0.0", commit: "dev", builtAt: null };
+  app.get("/api/health", (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({ ok: true, ...build });
+  });
   app.route("/api/auth", authRoutes(accounts, config));
 
   app.use("/api/projects/*", auth);

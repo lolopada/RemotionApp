@@ -2,6 +2,7 @@ import { ArrowLeft, Cloud, CloudOff, History, LoaderCircle, Redo2, Undo2 } from 
 import { useEffect, useState } from "react";
 import { useStore } from "zustand";
 import { Logo } from "../../components/Logo";
+import { NewVersionBanner } from "../../components/NewVersionBanner";
 import { IconButton } from "../../components/ui";
 import { navigate } from "../../lib/router";
 import { type SaveStatus, useEditor } from "../../store/editorStore";
@@ -67,6 +68,7 @@ export function TopBar({
       ) : null}
 
       <div className="ml-auto flex items-center gap-1">
+        <NewVersionBanner compact beforeReload={flush} />
         <button
           type="button"
           onClick={() => setHistoryOpen(true)}

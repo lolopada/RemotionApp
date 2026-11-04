@@ -31,6 +31,23 @@ proxy_send_timeout 900s;
 send_timeout 900s;
 ```
 
+### Quelle version tourne ?
+
+Chaque build porte un numéro : **version** (champ `version` du `package.json` racine, à augmenter
+quand tu veux marquer une étape) + **commit git** (+ `+modifs` si des fichiers ont changé sans
+commit) + **date du build**. On le voit :
+
+- **sur le site**, en bas de « Mes projets » et de l'écran de connexion (ex. `v1.0.0 · a1b2c3d · 04/11/2026 19:30`) ;
+- **par l'API** : `curl https://montage.paada.fr/api/health` ;
+- **dans la CT** : `./deploy/install.sh --version` (code du dépôt vs version en ligne) et `montage-doctor`,
+  qui dit aussi s'il y a des commits sur GitHub pas encore installés ;
+- **pendant une mise à jour** : `install.sh` affiche l'ancienne et la nouvelle version, puis vérifie que
+  le serveur annonce bien le nouveau commit (sinon il s'arrête en erreur).
+
+Si une mise à jour est installée pendant qu'un onglet est ouvert, le site affiche « Nouvelle version »
+(bandeau sur l'accueil, bouton dans l'éditeur qui enregistre puis recharge). La page n'est jamais
+gardée en cache par le navigateur (seuls les fichiers de `/assets`, dont le nom change à chaque build, le sont).
+
 ### Vérifier que tout marche
 
 | Outil                                                                            | Où                       | Rôle                                                                      |

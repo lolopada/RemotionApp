@@ -29,7 +29,9 @@ const opt = (n, d) => {
 };
 const BASE = (args.find((a) => /^https?:\/\//.test(a)) ?? "").replace(/\/+$/, "");
 if (!BASE || flag("help")) {
-  console.log("Usage : node deploy/smoke-test.mjs https://montage.paada.fr [--user U --password P] [--big-mb 60] [--browser] [--no-ratelimit]");
+  console.log(
+    "Usage : node deploy/smoke-test.mjs https://montage.paada.fr [--user U --password P] [--big-mb 60] [--browser] [--no-ratelimit]",
+  );
   process.exit(BASE ? 0 : 2);
 }
 if (flag("insecure")) process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -48,7 +50,8 @@ const head = (t) => {
 };
 const record = (status, name, detail = "") => {
   results.push({ status, section, name, detail });
-  const icon = status === "ok" ? c("32", "✓") : status === "warn" ? c("33", "!") : status === "skip" ? c("90", "–") : c("31", "✗");
+  const icon =
+    status === "ok" ? c("32", "✓") : status === "warn" ? c("33", "!") : status === "skip" ? c("90", "–") : c("31", "✗");
   console.log(`  ${icon} ${name}${detail ? c("90", `  ${detail}`) : ""}`);
 };
 /** Exécute un contrôle ; une exception = échec. Retourne true si OK. */
@@ -75,7 +78,10 @@ class Client {
     this.cookie = "";
     this.ip = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
   }
-  async req(path, { method = "GET", json, body, headers = {}, raw = false, redirect = "manual", origin = BASE, fakeIp = false } = {}) {
+  async req(
+    path,
+    { method = "GET", json, body, headers = {}, raw = false, redirect = "manual", origin = BASE, fakeIp = false } = {},
+  ) {
     const h = { ...headers };
     if (this.cookie) h.cookie = this.cookie;
     if (json !== undefined) h["content-type"] = "application/json";
@@ -185,7 +191,12 @@ function makePng() {
   ihdr[8] = 8;
   ihdr[9] = 2;
   const { deflateSync } = awaitZlib;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 const awaitZlib = await import("node:zlib");
 /** WAV mono 1 s (440 Hz). */
@@ -205,7 +216,8 @@ function makeWav() {
   buf.writeUInt16LE(16, 34);
   buf.write("data", 36);
   buf.writeUInt32LE(n * 2, 40);
-  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 12000), 44 + i * 2);
+  for (let i = 0; i < n; i++)
+    buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 12000), 44 + i * 2);
   return buf;
 }
 /** Faux MP4 de `size` octets : en-tête « ftyp » valide puis octets aléatoires (le serveur ne l'ouvre pas). */
@@ -216,7 +228,10 @@ function makeFakeMp4(size) {
     randomFillSync(block, 0, 64); // varie un peu chaque tour
     block.copy(buf, off, 0, Math.min(block.length, size - off));
   }
-  Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d, 0x6d, 0x70, 0x34, 0x31]).copy(buf, 0);
+  Buffer.from([
+    0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d, 0x6d, 0x70, 0x34,
+    0x31,
+  ]).copy(buf, 0);
   return buf;
 }
 const multipart = (name, type, data) => {
@@ -247,7 +262,11 @@ await check("le site répond", async () => {
   const t = Date.now();
   const res = await fetch(`${BASE}/api/health`);
   expect(res.ok, `HTTP ${res.status}`);
-  return `${Date.now() - t} ms`;
+  const ms = Date.now() - t;
+  const h = await res.json().catch(() => ({}));
+  if (!h.version) return `${ms} ms · version inconnue (serveur antérieur au numéro de version)`;
+  const built = h.builtAt ? ` · construite le ${new Date(h.builtAt).toLocaleString("fr-FR")}` : "";
+  return `${ms} ms · v${h.version} · ${h.commit}${built}`;
 });
 if (IS_HTTPS) {
   await check("certificat TLS valide", async () => {
@@ -266,15 +285,26 @@ if (IS_HTTPS) {
     expect(days > 7, `expire dans ${days} jours`);
     return `expire dans ${days} jours (${info.cert.issuer?.O ?? "?"})`;
   });
-  await check("http:// redirige vers https://", async () => {
-    const res = await fetch(`http://${URL_.host}/`, { redirect: "manual" });
-    expect([301, 302, 307, 308].includes(res.status), `HTTP ${res.status} (active « Force SSL » dans NPM)`);
-    expect((res.headers.get("location") ?? "").startsWith("https://"), `redirige vers ${res.headers.get("location")}`);
-    return `${res.status} → ${res.headers.get("location")}`;
-  }, { warnOnly: true });
+  await check(
+    "http:// redirige vers https://",
+    async () => {
+      const res = await fetch(`http://${URL_.host}/`, { redirect: "manual" });
+      expect([301, 302, 307, 308].includes(res.status), `HTTP ${res.status} (active « Force SSL » dans NPM)`);
+      expect(
+        (res.headers.get("location") ?? "").startsWith("https://"),
+        `redirige vers ${res.headers.get("location")}`,
+      );
+      return `${res.status} → ${res.headers.get("location")}`;
+    },
+    { warnOnly: true },
+  );
 } else {
   const local = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(URL_.hostname);
-  record(local ? "ok" : "warn", "connexion en http", local ? "localhost est un contexte sécurisé" : "l'export vidéo exige HTTPS (WebCodecs) : à corriger avant usage");
+  record(
+    local ? "ok" : "warn",
+    "connexion en http",
+    local ? "localhost est un contexte sécurisé" : "l'export vidéo exige HTTPS (WebCodecs) : à corriger avant usage",
+  );
 }
 
 // ---------- 2. Application ----------
@@ -293,7 +323,10 @@ await check("le JavaScript de l'éditeur se charge (bon type MIME)", async () =>
   const res = await fetch(new URL(m[1], `${BASE}/`));
   const type = res.headers.get("content-type") ?? "";
   expect(res.ok, `HTTP ${res.status} pour ${m[1]}`);
-  expect(/javascript/.test(type), `type « ${type} » : un vieux index.html est servi (redémarre le service après un build)`);
+  expect(
+    /javascript/.test(type),
+    `type « ${type} » : un vieux index.html est servi (redémarre le service après un build)`,
+  );
   const body = await res.arrayBuffer();
   return `${m[1]} · ${mb(body.byteLength)}`;
 });
@@ -307,23 +340,41 @@ await check("API /api/auth/config", async () => {
   expect(typeof j.allowSignup === "boolean", "réponse inattendue");
   return j.allowSignup ? "inscriptions ouvertes" : "inscriptions fermées";
 });
-const signupOpen = await fetch(`${BASE}/api/auth/config`).then((r) => r.json()).then((j) => j.allowSignup).catch(() => false);
+const signupOpen = await fetch(`${BASE}/api/auth/config`)
+  .then((r) => r.json())
+  .then((j) => j.allowSignup)
+  .catch(() => false);
 
 // ---------- 3. Sécurité sans compte ----------
 head("3. Sécurité (sans compte)");
 const anon = new Client("anonyme");
-for (const path of ["/api/projects", "/api/assets", "/api/videos", "/api/templates", "/api/auth/me", "/files/inexistant.jpg"]) {
+for (const path of [
+  "/api/projects",
+  "/api/assets",
+  "/api/videos",
+  "/api/templates",
+  "/api/auth/me",
+  "/files/inexistant.jpg",
+]) {
   await check(`${path} refuse sans connexion`, async () => {
     const res = await anon.req(path);
     expect(res.status === 401, `HTTP ${res.status} (attendu 401)`);
   });
 }
 await check("une requête venant d'un autre site est refusée (CSRF)", async () => {
-  const res = await anon.req("/api/auth/login", { method: "POST", json: { username: "x", password: "y" }, origin: "https://evil.example" });
+  const res = await anon.req("/api/auth/login", {
+    method: "POST",
+    json: { username: "x", password: "y" },
+    origin: "https://evil.example",
+  });
   expect(res.status === 403, `HTTP ${res.status} (attendu 403) : X-Forwarded-Host mal transmis par le proxy ?`);
 });
 await check("mauvais identifiants refusés", async () => {
-  const res = await anon.req("/api/auth/login", { method: "POST", json: { username: `nobody-${stamp}`, password: "mauvais-mot-de-passe" }, fakeIp: true });
+  const res = await anon.req("/api/auth/login", {
+    method: "POST",
+    json: { username: `nobody-${stamp}`, password: "mauvais-mot-de-passe" },
+    fakeIp: true,
+  });
   expect(res.status === 401 || res.status === 400, `HTTP ${res.status}`);
 });
 
@@ -345,7 +396,11 @@ if (user && password) {
   password = randomBytes(12).toString("base64url");
   tempAccount = true;
   loggedIn = await check(`création du compte temporaire « ${user} »`, async () => {
-    const res = await main.req("/api/auth/register", { method: "POST", json: { username: user, password }, fakeIp: true });
+    const res = await main.req("/api/auth/register", {
+      method: "POST",
+      json: { username: user, password },
+      fakeIp: true,
+    });
     expect(res.status === 201, `HTTP ${res.status} : ${res.json_?.error ?? ""}`);
   });
 } else {
@@ -353,7 +408,11 @@ if (user && password) {
 }
 if (loggedIn) {
   await check("cookie de session sécurisé", async () => {
-    const res = await new Client("c").req("/api/auth/login", { method: "POST", json: { username: user, password }, fakeIp: true });
+    const res = await new Client("c").req("/api/auth/login", {
+      method: "POST",
+      json: { username: user, password },
+      fakeIp: true,
+    });
     const cookie = (res.setCookies ?? []).find((s) => s.startsWith("montage_session="));
     expect(cookie, "pas de cookie de session");
     expect(/HttpOnly/i.test(cookie), "HttpOnly manquant");
@@ -389,7 +448,10 @@ if (loggedIn) {
     expect(item.sceneCount === 2 && item.previewScene, "résumé incomplet");
   });
   await check("modifier et enregistrer à nouveau", async () => {
-    const res = await main.req(`/api/projects/${project.id}`, { method: "PUT", json: { ...project, name: `Test ${stamp} (v2)`, updatedAt: new Date().toISOString() } });
+    const res = await main.req(`/api/projects/${project.id}`, {
+      method: "PUT",
+      json: { ...project, name: `Test ${stamp} (v2)`, updatedAt: new Date().toISOString() },
+    });
     expect(res.ok, `HTTP ${res.status}`);
   });
   await check("un projet invalide est refusé (400)", async () => {
@@ -403,7 +465,10 @@ if (loggedIn) {
   await check("historique des versions", async () => {
     const res = await main.req(`/api/projects/${project.id}/versions`);
     expect(res.ok && Array.isArray(res.json_), `HTTP ${res.status}`);
-    const named = await main.req(`/api/projects/${project.id}/versions`, { method: "POST", json: { name: "Version de test" } });
+    const named = await main.req(`/api/projects/${project.id}/versions`, {
+      method: "POST",
+      json: { name: "Version de test" },
+    });
     expect(named.ok || named.status === 201, `création HTTP ${named.status}`);
     return `${res.json_.length} version(s)`;
   });
@@ -415,7 +480,10 @@ if (loggedIn) {
     expect(res.status === 201 || res.ok, `création HTTP ${res.status} : ${res.text_.slice(0, 100)}`);
     created.templates.push(res.json_.id);
     const list = await main.req("/api/templates");
-    expect(list.json_.some((t) => t.id === res.json_.id), "absent de la liste");
+    expect(
+      list.json_.some((t) => t.id === res.json_.id),
+      "absent de la liste",
+    );
     const del = await main.req(`/api/templates/${res.json_.id}`, { method: "DELETE" });
     expect(del.status === 204, `suppression HTTP ${del.status}`);
     created.templates.pop();
@@ -441,13 +509,19 @@ if (loggedIn) {
     created.assets.push(wavAsset.id);
   });
   await check("un type de fichier non accepté est refusé (415)", async () => {
-    const res = await main.req("/api/assets", { method: "POST", body: multipart("virus.exe", "application/x-msdownload", Buffer.from("MZ")) });
+    const res = await main.req("/api/assets", {
+      method: "POST",
+      body: multipart("virus.exe", "application/x-msdownload", Buffer.from("MZ")),
+    });
     expect(res.status === 415, `HTTP ${res.status}`);
   });
   await check("lister les médias par type", async () => {
     const imgs = (await main.req("/api/assets?kind=image")).json_;
     const auds = (await main.req("/api/assets?kind=audio")).json_;
-    expect(imgs.some((a) => a.id === pngAsset?.id) && auds.some((a) => a.id === wavAsset?.id), "média absent de la liste");
+    expect(
+      imgs.some((a) => a.id === pngAsset?.id) && auds.some((a) => a.id === wavAsset?.id),
+      "média absent de la liste",
+    );
   });
   if (pngAsset) {
     await check("télécharger la photo : octets identiques", async () => {
@@ -470,7 +544,10 @@ if (loggedIn) {
       expect(res.status === 206, `HTTP ${res.status} (attendu 206) : le proxy bloque les requêtes Range ?`);
       const buf = Buffer.from(await res.arrayBuffer());
       expect(buf.length === 100, `${buf.length} octets reçus`);
-      expect((res.headers.get("content-range") ?? "").startsWith("bytes 0-99/"), `Content-Range : ${res.headers.get("content-range")}`);
+      expect(
+        (res.headers.get("content-range") ?? "").startsWith("bytes 0-99/"),
+        `Content-Range : ${res.headers.get("content-range")}`,
+      );
     });
   }
   // Isolation entre comptes : un second compte ne voit rien du premier.
@@ -480,7 +557,8 @@ if (loggedIn) {
     const p2 = opt("password2") ?? randomBytes(12).toString("base64url");
     const okLogin = opt("user2")
       ? (await other.req("/api/auth/login", { method: "POST", json: { username: u2, password: p2 }, fakeIp: true })).ok
-      : (await other.req("/api/auth/register", { method: "POST", json: { username: u2, password: p2 }, fakeIp: true })).status === 201;
+      : (await other.req("/api/auth/register", { method: "POST", json: { username: u2, password: p2 }, fakeIp: true }))
+          .status === 201;
     if (okLogin) {
       await check("isolation : un autre compte ne peut pas lire mes fichiers", async () => {
         const res = await other.req(pngAsset.url);
@@ -516,13 +594,20 @@ if (loggedIn) {
   let video;
   await check(`envoyer ${BIG_MB} Mo de MP4 (client_max_body_size, délais, flux)`, async () => {
     const t = Date.now();
-    const res = await main.req(`/api/videos?name=${encodeURIComponent(`Test ${stamp}`)}&width=1280&height=720&duration=2`, {
-      method: "POST",
-      body: mp4,
-      headers: { "content-type": "video/mp4" },
-    });
+    const res = await main.req(
+      `/api/videos?name=${encodeURIComponent(`Test ${stamp}`)}&width=1280&height=720&duration=2`,
+      {
+        method: "POST",
+        body: mp4,
+        headers: { "content-type": "video/mp4" },
+      },
+    );
     if (res.status === 413) {
-      throw new Error(/nginx/i.test(res.text_) ? "413 de Nginx : ajoute « client_max_body_size 2g; » dans l'onglet Advanced de NPM" : `413 : ${res.json_?.error ?? ""} (MAX_EXPORT_MB trop bas ?)`);
+      throw new Error(
+        /nginx/i.test(res.text_)
+          ? "413 de Nginx : ajoute « client_max_body_size 2g; » dans l'onglet Advanced de NPM"
+          : `413 : ${res.json_?.error ?? ""} (MAX_EXPORT_MB trop bas ?)`,
+      );
     }
     if (res.status === 502 || res.status === 504 || res.status === 499) {
       throw new Error(`HTTP ${res.status} : délai du proxy dépassé (proxy_read_timeout / proxy_send_timeout)`);
@@ -550,12 +635,19 @@ if (loggedIn) {
       return `${((Date.now() - t) / 1000).toFixed(1)} s`;
     });
     await check("renommer la vidéo", async () => {
-      const res = await main.req(`/api/videos/${video.id}`, { method: "PATCH", json: { name: `Test ${stamp} renommée` } });
+      const res = await main.req(`/api/videos/${video.id}`, {
+        method: "PATCH",
+        json: { name: `Test ${stamp} renommée` },
+      });
       expect(res.ok && res.json_.name.endsWith("renommée"), `HTTP ${res.status}`);
     });
   }
   await check("un format non MP4/WebM est refusé (415)", async () => {
-    const res = await main.req("/api/videos?name=x", { method: "POST", body: Buffer.from("x"), headers: { "content-type": "application/pdf" } });
+    const res = await main.req("/api/videos?name=x", {
+      method: "POST",
+      body: Buffer.from("x"),
+      headers: { "content-type": "application/pdf" },
+    });
     expect(res.status === 415, `HTTP ${res.status}`);
   });
 
@@ -571,14 +663,31 @@ if (loggedIn) {
         pw = createRequire(`${process.cwd()}/`)("playwright");
       }
     } catch {
-      record("fail", "playwright introuvable", "mkdir ~/e2e && cd ~/e2e && npm i playwright && npx playwright install chromium --with-deps, puis lance le test depuis ce dossier");
+      record(
+        "fail",
+        "playwright introuvable",
+        "mkdir ~/e2e && cd ~/e2e && npm i playwright && npx playwright install chromium --with-deps, puis lance le test depuis ce dossier",
+      );
     }
     if (pw) {
       let browser;
       try {
         browser = await pw.chromium.launch();
-        const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true, ignoreHTTPSErrors: flag("insecure") });
-        await ctx.addCookies([{ name: "montage_session", value: main.cookie.split("=")[1], url: BASE, httpOnly: true, secure: IS_HTTPS, sameSite: "Lax" }]);
+        const ctx = await browser.newContext({
+          viewport: { width: 1400, height: 900 },
+          acceptDownloads: true,
+          ignoreHTTPSErrors: flag("insecure"),
+        });
+        await ctx.addCookies([
+          {
+            name: "montage_session",
+            value: main.cookie.split("=")[1],
+            url: BASE,
+            httpOnly: true,
+            secure: IS_HTTPS,
+            sameSite: "Lax",
+          },
+        ]);
         const page = await ctx.newPage();
         const errors = [];
         page.on("pageerror", (e) => errors.push(e.message));
@@ -592,7 +701,11 @@ if (loggedIn) {
           expect(errors.length === 0, errors[0] ?? "");
         });
         await check("contexte sécurisé + WebCodecs disponibles", async () => {
-          const caps = await page.evaluate(() => ({ secure: window.isSecureContext, enc: typeof VideoEncoder, dec: typeof VideoDecoder }));
+          const caps = await page.evaluate(() => ({
+            secure: window.isSecureContext,
+            enc: typeof VideoEncoder,
+            dec: typeof VideoDecoder,
+          }));
           expect(caps.secure, "contexte non sécurisé (HTTPS requis)");
           expect(caps.enc === "function" && caps.dec === "function", "WebCodecs absent");
         });
@@ -630,17 +743,24 @@ if (loggedIn) {
 // ---------- 9. Limitation des essais ----------
 if (!flag("no-ratelimit")) {
   head("9. Protection contre les essais de mots de passe");
-  await check("trop d'essais de connexion → 429", async () => {
-    // Sans fakeIp : on mesure ce que voit vraiment le serveur derrière NPM.
-    const c2 = new Client("rl");
-    let got429 = false;
-    for (let i = 0; i < 14 && !got429; i++) {
-      const res = await c2.req("/api/auth/login", { method: "POST", json: { username: `rl-${stamp}`, password: "x" } });
-      got429 = res.status === 429;
-    }
-    expect(got429, "aucun blocage après 14 essais : X-Forwarded-For n'est pas transmis ?");
-    return "blocage actif (réessaie dans 1 minute)";
-  }, { warnOnly: true });
+  await check(
+    "trop d'essais de connexion → 429",
+    async () => {
+      // Sans fakeIp : on mesure ce que voit vraiment le serveur derrière NPM.
+      const c2 = new Client("rl");
+      let got429 = false;
+      for (let i = 0; i < 14 && !got429; i++) {
+        const res = await c2.req("/api/auth/login", {
+          method: "POST",
+          json: { username: `rl-${stamp}`, password: "x" },
+        });
+        got429 = res.status === 429;
+      }
+      expect(got429, "aucun blocage après 14 essais : X-Forwarded-For n'est pas transmis ?");
+      return "blocage actif (réessaie dans 1 minute)";
+    },
+    { warnOnly: true },
+  );
 }
 
 // ---------- Nettoyage ----------
@@ -648,7 +768,11 @@ head("Nettoyage");
 await cleanup();
 record("ok", "projets, médias, vidéos et modèles de test supprimés");
 if (tempAccount) {
-  record("warn", `le compte « ${user} » reste en base`, "il n'y a pas de suppression de compte dans l'appli : utilise un compte dédié avec --user pour éviter ça");
+  record(
+    "warn",
+    `le compte « ${user} » reste en base`,
+    "il n'y a pas de suppression de compte dans l'appli : utilise un compte dédié avec --user pour éviter ça",
+  );
 }
 
 // ---------- Bilan ----------
@@ -656,7 +780,9 @@ const fails = results.filter((r) => r.status === "fail");
 const warns = results.filter((r) => r.status === "warn");
 const oks = results.filter((r) => r.status === "ok");
 console.log(`\n${c("1", "Bilan")} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
-console.log(`  ${c("32", `${oks.length} réussis`)} · ${c("33", `${warns.length} avertissement(s)`)} · ${fails.length ? c("31", `${fails.length} échec(s)`) : "0 échec"}`);
+console.log(
+  `  ${c("32", `${oks.length} réussis`)} · ${c("33", `${warns.length} avertissement(s)`)} · ${fails.length ? c("31", `${fails.length} échec(s)`) : "0 échec"}`,
+);
 if (fails.length) {
   console.log(`\n${c("31", "À corriger :")}`);
   for (const f of fails) console.log(`  ✗ [${f.section}] ${f.name}${f.detail ? ` — ${f.detail}` : ""}`);

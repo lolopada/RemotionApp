@@ -2,9 +2,11 @@ import clsx from "clsx";
 import { ChevronDown, KeyRound, LogOut } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Logo } from "../../components/Logo";
+import { NewVersionBanner } from "../../components/NewVersionBanner";
 import { MenuItem, Popover } from "../../components/Popover";
 import { api } from "../../lib/api";
 import { navigate, useRoute } from "../../lib/router";
+import { BUILD, formatBuild } from "../../lib/version";
 import { useAuth } from "../../store/authStore";
 
 /** En-tête commun aux pages « Mes projets » et « Mes vidéos ». */
@@ -17,6 +19,7 @@ export function HomeLayout({ children, actions }: { children: ReactNode; actions
 
   return (
     <div className="flex h-full flex-col">
+      <NewVersionBanner />
       <header className="flex h-14 shrink-0 items-center gap-6 border-line border-b bg-panel px-5">
         <div className="flex items-center gap-2">
           <Logo />
@@ -44,6 +47,9 @@ export function HomeLayout({ children, actions }: { children: ReactNode; actions
       </header>
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-5 py-8">{children}</div>
+        <footer className="pb-4 text-center text-[11px] text-ink-faint tabular-nums" title="Version en ligne">
+          Montage {formatBuild(BUILD)}
+        </footer>
       </main>
     </div>
   );

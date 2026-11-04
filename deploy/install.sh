@@ -2,8 +2,8 @@
 # Installation / mise à jour de Montage dans un conteneur Debian ou Ubuntu (à lancer en root).
 #
 #   Première installation :   ./deploy/install.sh --domain montage.paada.fr
-#   Mise à jour (même commande, après avoir copié la nouvelle version du code) :
-#                             ./deploy/install.sh
+#   Mise à jour depuis GitHub : ./deploy/install.sh --pull
+#   (équivaut à git pull puis relance ; sans --pull, installe le code tel qu'il est sur le disque)
 #
 # Le script est relançable sans risque : il garde la configuration (/etc/montage.env) et les
 # données, fait une sauvegarde avant chaque mise à jour, puis relance le service.
@@ -21,6 +21,9 @@ DOMAIN=""
 CLOSED="no"          # yes = ALLOW_SIGNUP=false dès l'installation
 BACKUP_TIMER="yes"
 SOURCE=""
+PULL="no"
+SHOW_VERSION="no"
+REPO_URL="https://github.com/lolopada/RemotionApp.git"
 NODE_MAJOR="22"
 NODE_MIN="22.13.0"
 
@@ -28,6 +31,9 @@ usage() {
   cat <<USAGE
 Usage : $0 [options]
   --source DIR      dossier du code à installer (défaut : le dépôt qui contient ce script)
+  --version         affiche la version du code et celle en ligne, puis s'arrête
+  --pull            fait un git pull (fast-forward) du dépôt avant d'installer
+  --repo URL        dépôt cité dans les messages d'aide (défaut : $REPO_URL)
   --domain NOM      nom de domaine public (affichage des consignes NPM uniquement)
   --port N          port d'écoute (défaut : $PORT)
   --data-dir DIR    base + fichiers des comptes (défaut : $DATA_DIR)
@@ -40,6 +46,9 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source) SOURCE="$2"; shift 2 ;;
+    --pull) PULL="yes"; shift ;;
+    --version) SHOW_VERSION="yes"; shift ;;
+    --repo) REPO_URL="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --data-dir) DATA_DIR="$2"; shift 2 ;;
@@ -63,8 +72,52 @@ command -v apt-get >/dev/null || die "Ce script supporte Debian et Ubuntu (apt).
 
 # Dossier du code : le dépôt qui contient deploy/install.sh, sauf indication contraire.
 if [[ -z "$SOURCE" ]]; then SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; fi
+if [[ "$PULL" == yes ]]; then
+  command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git >/dev/null; }
+  if [[ -d "$SOURCE/.git" ]]; then
+    step "Récupération de la dernière version (git pull)"
+    git -C "$SOURCE" pull --ff-only || die "git pull impossible (modifications locales ou branches divergentes ?). Voir : git -C $SOURCE status"
+    ok "code à jour : $(git -C "$SOURCE" log -1 --format='%h %s')"
+  else
+    die "$SOURCE n'est pas un clone git. Fais : git clone $REPO_URL <dossier> puis lance le script depuis ce dossier."
+  fi
+fi
 [[ -f "$SOURCE/package.json" && -d "$SOURCE/apps/server" ]] || die "$SOURCE ne ressemble pas au dépôt Montage (package.json / apps/server introuvables)."
 SOURCE="$(cd "$SOURCE" && pwd)"
+
+# ---------- Numéro de version ----------
+# Version = champ "version" du package.json + commit git (« +modifs » si des fichiers ont changé
+# sans commit). Elle est inscrite dans le build et renvoyée par /api/health.
+json_field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -n1; }
+NEW_VERSION="$(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$SOURCE/package.json" | head -n1)"
+NEW_VERSION="${NEW_VERSION:-0.0.0}"
+NEW_COMMIT="inconnu"
+if command -v git >/dev/null && [[ -d "$SOURCE/.git" ]]; then
+  NEW_COMMIT="$(git -C "$SOURCE" rev-parse --short HEAD 2>/dev/null || echo inconnu)"
+  [[ -n "$(git -C "$SOURCE" status --porcelain 2>/dev/null)" ]] && NEW_COMMIT="$NEW_COMMIT+modifs"
+fi
+live_port() {
+  local p=""
+  [[ -f "$ENV_FILE" ]] && p="$(grep -E '^PORT=' "$ENV_FILE" | tail -n1 | cut -d= -f2)"
+  echo "${p:-$PORT}"
+}
+live_health() { curl -fsS -m 3 "http://127.0.0.1:$(live_port)/api/health" 2>/dev/null || true; }
+format_version() { # version commit date
+  local d=""
+  [[ -n "${3:-}" ]] && d=" · construite le $(date -d "$3" '+%d/%m/%Y %H:%M' 2>/dev/null || echo "$3")"
+  echo "v$1 · $2$d"
+}
+LIVE="$(live_health)"
+LIVE_VERSION="$(echo "$LIVE" | json_field version)"
+LIVE_COMMIT="$(echo "$LIVE" | json_field commit)"
+LIVE_TXT="aucune (service arrêté ou pas encore installé)"
+[[ -n "$LIVE_VERSION" ]] && LIVE_TXT="$(format_version "$LIVE_VERSION" "$LIVE_COMMIT" "$(echo "$LIVE" | json_field builtAt)")"
+if [[ "$SHOW_VERSION" == "yes" ]]; then
+  echo "Code ($SOURCE) : v$NEW_VERSION · $NEW_COMMIT"
+  echo "En ligne        : $LIVE_TXT"
+  if [[ -n "$LIVE_COMMIT" && "$LIVE_COMMIT" != "$NEW_COMMIT" ]]; then echo "→ différent : lance $0 pour installer le code."; fi
+  exit 0
+fi
 
 version_ge() { [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]; }
 
@@ -72,6 +125,8 @@ UPDATE="no"
 [[ -f "/etc/systemd/system/montage.service" ]] && UPDATE="yes"
 step "Montage — $([[ $UPDATE == yes ]] && echo 'mise à jour' || echo 'première installation')"
 echo "  code      : $SOURCE"
+echo "  version   : ${B}v$NEW_VERSION · $NEW_COMMIT${N}   (en ligne : $LIVE_TXT)"
+[[ -n "$LIVE_COMMIT" && "$LIVE_COMMIT" == "$NEW_COMMIT" ]] && warn "cette version est déjà en ligne : réinstallation (rien de neuf depuis GitHub ? essaie --pull)"
 echo "  appli     : $APP_DIR"
 echo "  données   : $DATA_DIR"
 echo "  port      : $PORT"
@@ -80,7 +135,7 @@ echo "  port      : $PORT"
 step "1/8  Paquets système"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates gnupg rsync sqlite3 xz-utils >/dev/null
+apt-get install -y -qq curl ca-certificates gnupg git rsync sqlite3 xz-utils >/dev/null
 ok "curl, rsync, sqlite3"
 
 # ---------- 2. Node.js ----------
@@ -154,9 +209,10 @@ run_as_app() {
 echo "  installation des dépendances (quelques minutes la première fois)…"
 run_as_app "pnpm install --frozen-lockfile" >/tmp/montage-install.log 2>&1 || { tail -n 30 /tmp/montage-install.log; die "pnpm install a échoué (journal : /tmp/montage-install.log)."; }
 ok "dépendances installées"
-run_as_app "pnpm build" >/tmp/montage-build.log 2>&1 || { tail -n 30 /tmp/montage-build.log; die "pnpm build a échoué (journal : /tmp/montage-build.log)."; }
+run_as_app "MONTAGE_COMMIT='$NEW_COMMIT' pnpm build" >/tmp/montage-build.log 2>&1 || { tail -n 30 /tmp/montage-build.log; die "pnpm build a échoué (journal : /tmp/montage-build.log)."; }
 [[ -f "$APP_DIR/apps/editor/dist/index.html" ]] || die "Le build n'a pas produit apps/editor/dist/index.html."
-ok "éditeur compilé"
+ok "éditeur compilé (v$NEW_VERSION · $NEW_COMMIT)"
+echo "$SOURCE" > "$BASE_DIR/source-path"
 
 # ---------- 7. Configuration, service, sauvegarde ----------
 step "7/8  Configuration et service systemd"
@@ -277,12 +333,23 @@ if [[ "$healthy" != "yes" ]]; then
   die "Le serveur ne répond pas sur le port $PORT (voir le journal ci-dessus)."
 fi
 ok "l'API répond (http://127.0.0.1:$PORT/api/health)"
+SERVED="$(curl -fsS -m 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)"
+SERVED_COMMIT="$(echo "$SERVED" | json_field commit)"
+SERVED_TXT="$(format_version "$(echo "$SERVED" | json_field version)" "$SERVED_COMMIT" "$(echo "$SERVED" | json_field builtAt)")"
+if [[ "$SERVED_COMMIT" == "$NEW_COMMIT" ]]; then
+  ok "version en ligne : $SERVED_TXT"
+else
+  die "Le serveur annonce « $SERVED_TXT » au lieu de v$NEW_VERSION · $NEW_COMMIT (un ancien processus tourne encore ? systemctl restart montage)."
+fi
 curl -fsS "http://127.0.0.1:$PORT/" | grep -qi '<div id="root"' && ok "l'éditeur est servi" || warn "la page d'accueil n'a pas l'air de l'éditeur"
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 
 cat <<DONE
 
-${B}Terminé.${N}  Service : systemctl status montage   ·   Journal : journalctl -u montage -f
+${B}Terminé : $SERVED_TXT${N}
+  Service : systemctl status montage   ·   Journal : journalctl -u montage -f
+  Version : affichée en bas de la page d'accueil du site, et par  $SOURCE/deploy/install.sh --version
+  Mise à jour : cd $SOURCE && ./deploy/install.sh --pull
 
 ${B}À faire dans Nginx Proxy Manager${N} (Proxy Host ${DOMAIN:-montage.exemple.fr}) :
   Forward : http  ${IP:-IP-de-la-CT}  $PORT      SSL : Let's Encrypt + Force SSL + HTTP/2
