@@ -1,5 +1,5 @@
 import { ProjectVideo } from "@app/composition";
-import { getProjectDurationInFrames, type Project } from "@app/schema";
+import { getProjectDurationInFrames, type Project, projectHasSound } from "@app/schema";
 import { canRenderMediaOnWeb, renderMediaOnWeb } from "@remotion/web-renderer";
 
 export interface ExportOptions {
@@ -19,7 +19,7 @@ export async function exportVideo(project: Project, { onProgress, signal, scale 
     width: project.width,
     height: project.height,
     scale,
-    muted: project.audio.length === 0,
+    muted: !projectHasSound(project),
   });
   if (!check.canRender) {
     const reasons = check.issues.filter((i) => i.severity === "error").map((i) => i.message);
@@ -43,7 +43,7 @@ export async function exportVideo(project: Project, { onProgress, signal, scale 
     inputProps,
     container: "mp4",
     scale,
-    muted: project.audio.length === 0,
+    muted: !projectHasSound(project),
     videoBitrate: "high",
     signal,
     onProgress: ({ progress }) => onProgress?.(progress),

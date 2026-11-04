@@ -1,6 +1,7 @@
 import type { StoredFile as AssetInfo } from "@app/schema";
-import { createImageLayer } from "@app/schema";
+import { createBackground, createImageLayer } from "@app/schema";
 import { ImagePlus, Trash2 } from "lucide-react";
+import { assignImage } from "../../lib/images";
 import { getImageSize } from "../../lib/media";
 import { useEditor, useProject, useSelectedLayer } from "../../store/editorStore";
 import { setDraggedAsset } from "../preview/dnd";
@@ -11,16 +12,14 @@ import { useAssets } from "./useAssets";
 export function MediaTab() {
   const project = useProject();
   const selected = useSelectedLayer();
-  const { addLayer, updateLayer, updateScene } = useEditor.getState();
+  const { addLayer, updateScene } = useEditor.getState();
   const selectedSceneId = useEditor((s) => s.selectedSceneId);
   const { assets, error, uploading, upload, remove } = useAssets("image");
 
   /** Clic : remplit le cadre sélectionné, sinon ajoute une photo au centre. */
   const use = async (asset: AssetInfo) => {
     if (selected?.type === "image") {
-      updateLayer(selected.id, (l) => {
-        if (l.type === "image") l.src = asset.url;
-      });
+      assignImage(selected.id, asset.url);
       return;
     }
     const { width, height } = await getImageSize(asset.url).catch(() => ({ width: 1, height: 1 }));
@@ -32,6 +31,7 @@ export function MediaTab() {
       createImageLayer({
         name: asset.name,
         src: asset.url,
+        imageAspect: width / height,
         transform: {
           x: Math.round((project.width - w) / 2),
           y: Math.round((project.height - h) / 2),
@@ -44,7 +44,9 @@ export function MediaTab() {
 
   const setAsBackground = (asset: AssetInfo) =>
     updateScene(selectedSceneId, (s) => {
-      s.background = { type: "image", src: asset.url, blur: 0 };
+      // On garde le flou, le voile et l'animation si le fond était déjà une photo.
+      if (s.background.type === "image") s.background.src = asset.url;
+      else s.background = createBackground({ type: "image", src: asset.url, blur: 0, grain: s.background.grain });
     });
 
   return (

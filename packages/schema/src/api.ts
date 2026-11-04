@@ -40,3 +40,35 @@ export interface StoredFile {
   durationSeconds: number | null;
   createdAt: string;
 }
+
+/**
+ * Version d'un projet dans l'historique.
+ *  - auto : instantané pris automatiquement pendant l'édition
+ *  - manual : version nommée par l'utilisateur (jamais supprimée automatiquement)
+ *  - before-restore : état juste avant une restauration (pour pouvoir l'annuler)
+ */
+export type ProjectVersionKind = "auto" | "manual" | "before-restore";
+
+export interface ProjectVersion {
+  id: string;
+  kind: ProjectVersionKind;
+  label: string | null;
+  name: string;
+  sceneCount: number;
+  durationInFrames: number;
+  fps: number;
+  /** Taille du projet (JSON), en octets. */
+  size: number;
+  createdAt: string;
+}
+
+/** Scène enregistrée dans « Mes modèles », avec le format du projet d'où elle vient. */
+export interface SceneTemplate {
+  id: string;
+  name: string;
+  scene: Scene;
+  width: number;
+  height: number;
+  fps: number;
+  createdAt: string;
+}

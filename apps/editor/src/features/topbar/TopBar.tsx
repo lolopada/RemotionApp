@@ -1,4 +1,4 @@
-import { ArrowLeft, Cloud, CloudOff, LoaderCircle, Redo2, Undo2 } from "lucide-react";
+import { ArrowLeft, Cloud, CloudOff, History, LoaderCircle, Redo2, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useStore } from "zustand";
 import { Logo } from "../../components/Logo";
@@ -6,6 +6,7 @@ import { IconButton } from "../../components/ui";
 import { navigate } from "../../lib/router";
 import { type SaveStatus, useEditor } from "../../store/editorStore";
 import { ExportButton } from "../export/ExportButton";
+import { HistoryPanel } from "../history/HistoryPanel";
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
   idle: "",
@@ -16,7 +17,16 @@ const SAVE_LABEL: Record<SaveStatus, string> = {
   offline: "Hors ligne, gardé sur cet appareil",
 };
 
-export function TopBar({ restoredDraft = false }: { restoredDraft?: boolean }) {
+export function TopBar({
+  restoredDraft = false,
+  flush,
+  reload,
+}: {
+  restoredDraft?: boolean;
+  flush: () => Promise<void>;
+  reload: () => void;
+}) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const name = useEditor((s) => s.project.name);
   const renameProject = useEditor((s) => s.renameProject);
   const saveStatus = useEditor((s) => s.saveStatus);
@@ -57,6 +67,13 @@ export function TopBar({ restoredDraft = false }: { restoredDraft?: boolean }) {
       ) : null}
 
       <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="mr-1 flex h-7 items-center gap-1.5 rounded-md px-2 text-ink-muted text-xs hover:bg-panel-hover hover:text-ink"
+        >
+          <History size={15} /> Historique
+        </button>
         <IconButton label="Annuler (Ctrl+Z)" disabled={pastStates.length === 0} onClick={() => undo()}>
           <Undo2 size={16} />
         </IconButton>
@@ -66,6 +83,7 @@ export function TopBar({ restoredDraft = false }: { restoredDraft?: boolean }) {
         <div className="mx-2 h-5 w-px bg-line" />
         <ExportButton />
       </div>
+      {historyOpen ? <HistoryPanel onClose={() => setHistoryOpen(false)} flush={flush} reload={reload} /> : null}
     </header>
   );
 }

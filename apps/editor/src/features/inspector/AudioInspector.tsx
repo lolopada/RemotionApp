@@ -1,6 +1,7 @@
 import { type AudioClip, framesToSeconds, secondsToFrames } from "@app/schema";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { Field, IconButton, NumberInput, Section, Slider, TextInput } from "../../components/ui";
+import { WaveformPicker } from "../../components/WaveformPicker";
 import { useEditor, useProject } from "../../store/editorStore";
 
 export function AudioInspector({ clip }: { clip: AudioClip }) {
@@ -22,6 +23,25 @@ export function AudioInspector({ clip }: { clip: AudioClip }) {
         </IconButton>
       </div>
       <Section title="Musique">
+        <WaveformPicker
+          src={clip.src}
+          start={sec(clip.trimStartFrames)}
+          range={{ from: sec(clip.trimStartFrames), to: sec(clip.trimStartFrames + clip.durationInFrames) }}
+          onPick={(seconds, fileDuration) =>
+            update((c) => {
+              c.trimStartFrames = Math.min(fr(seconds), Math.max(0, Math.floor(fileDuration * project.fps) - 3));
+              // La durée ne peut pas dépasser ce qui reste du fichier.
+              c.durationInFrames = Math.max(
+                1,
+                Math.min(c.durationInFrames, Math.floor(fileDuration * project.fps) - c.trimStartFrames),
+              );
+            })
+          }
+        />
+        <p className="text-[11px] text-ink-faint leading-snug">
+          La partie claire est jouée. Clique la courbe pour choisir le début ; coupe début et fin en tirant les bords du
+          morceau dans la piste sous le storyboard.
+        </p>
         <Field label="Nom">
           <TextInput value={clip.name} onChange={(v) => update((c) => void (c.name = v))} />
         </Field>

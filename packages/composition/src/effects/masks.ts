@@ -1,6 +1,6 @@
 import type { Mask } from "@app/schema";
 import type { CSSProperties } from "react";
-import { ellipsePath, heartPath, roundedRectPath } from "./shapes";
+import { shapePath } from "./shapes";
 
 /**
  * Transforme un masque du schéma en style CSS.
@@ -22,8 +22,8 @@ export function getMaskStyle(mask: Mask, width: number, height: number): CSSProp
         return { overflow: "hidden", borderRadius: mask.radius };
       case "circle":
         return { overflow: "hidden", borderRadius: "50%" };
-      case "heart":
-        return { clipPath: `path('${heartPath(width, height)}')` };
+      default:
+        return { clipPath: `path('${shapePath(mask.shape, width, height)}')` };
     }
   }
 
@@ -66,12 +66,7 @@ function getFeatheredMaskUrl(mask: Mask, width: number, height: number): string 
 
   const iw = w - inset * 2;
   const ih = h - inset * 2;
-  const d =
-    mask.shape === "heart"
-      ? heartPath(iw, ih, inset, inset)
-      : mask.shape === "circle"
-        ? ellipsePath(iw, ih, inset, inset)
-        : roundedRectPath(iw, ih, mask.shape === "rounded" ? mask.radius * scale : 0, inset, inset);
+  const d = shapePath(mask.shape, iw, ih, { radius: mask.radius * scale, x: inset, y: inset });
 
   // Astuce compatible Safari (pas de ctx.filter) : on dessine la forme hors
   // champ et on ne garde que son ombre floutée, décalée pile au bon endroit.

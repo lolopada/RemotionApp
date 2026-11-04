@@ -1,11 +1,16 @@
 import {
   type AudioClip,
+  applyTheme as applyThemeToProject,
   duplicateScene as cloneScene,
   createScene,
+  type FrameSize,
   type Layer,
   newId,
   type Project,
+  resizeProject,
+  retimeProject,
   type Scene,
+  type Theme,
 } from "@app/schema";
 import { temporal } from "zundo";
 import { create } from "zustand";
@@ -19,23 +24,36 @@ interface EditorState {
   selectedSceneId: string;
   selectedLayerId: string | null;
   selectedAudioId: string | null;
+  /** Calque photo en cours de recadrage à la souris (double-clic). */
+  cropLayerId: string | null;
   saveStatus: SaveStatus;
 }
 
 interface EditorActions {
   loadProject(project: Project): void;
   renameProject(name: string): void;
+  /** Enregistre le thème et le réapplique à toutes les scènes (une seule étape d'annulation). */
+  applyTheme(theme: Theme): void;
+  /** Modifie le thème enregistré sans toucher aux scènes. */
+  updateTheme(recipe: (theme: Theme) => void): void;
+  /** Change la taille de l'image en adaptant tous les calques. */
+  setFormat(size: FrameSize): void;
+  /** Change la cadence en gardant les durées en secondes. */
+  setFps(fps: number): void;
   setSaveStatus(status: SaveStatus): void;
 
   selectScene(id: string): void;
   selectLayer(id: string | null): void;
   selectAudio(id: string | null): void;
+  setCropLayer(id: string | null): void;
 
   addScene(scene?: Scene, afterId?: string): void;
   duplicateScene(id: string): void;
   removeScene(id: string): void;
   moveScene(id: string, toIndex: number): void;
   updateScene(id: string, recipe: (scene: Scene) => void): void;
+  /** Copie la transition d'une scène (effet + durée) sur toutes les autres scènes. */
+  applyTransitionToAll(fromSceneId: string): void;
 
   addLayer(layer: Layer, sceneId?: string): void;
   updateLayer(id: string, recipe: (layer: Layer) => void): void;
@@ -78,6 +96,7 @@ const placeholderProject = (): Project => ({
   fps: 30,
   scenes: [createScene()],
   audio: [],
+  theme: null,
   createdAt: "",
   updatedAt: "",
 });
@@ -91,6 +110,7 @@ export const useEditor = create<EditorStore>()(
         selectedSceneId: initial.scenes[0]?.id ?? "",
         selectedLayerId: null,
         selectedAudioId: null,
+        cropLayerId: null,
         saveStatus: "idle",
 
         loadProject: (project) =>
@@ -99,10 +119,27 @@ export const useEditor = create<EditorStore>()(
             s.selectedSceneId = project.scenes[0]?.id ?? "";
             s.selectedLayerId = null;
             s.selectedAudioId = null;
+            s.cropLayerId = null;
           }),
         renameProject: (name) =>
           set((s) => {
             s.project.name = name;
+          }),
+        applyTheme: (theme) =>
+          set((s) => {
+            applyThemeToProject(s.project, theme);
+          }),
+        updateTheme: (recipe) =>
+          set((s) => {
+            if (s.project.theme) recipe(s.project.theme);
+          }),
+        setFormat: (size) =>
+          set((s) => {
+            resizeProject(s.project, size);
+          }),
+        setFps: (fps) =>
+          set((s) => {
+            retimeProject(s.project, fps);
           }),
         setSaveStatus: (status) =>
           set((s) => {
@@ -111,7 +148,10 @@ export const useEditor = create<EditorStore>()(
 
         selectScene: (id) =>
           set((s) => {
-            if (s.selectedSceneId !== id) s.selectedLayerId = null;
+            if (s.selectedSceneId !== id) {
+              s.selectedLayerId = null;
+              s.cropLayerId = null;
+            }
             s.selectedSceneId = id;
             s.selectedAudioId = null;
           }),
@@ -119,10 +159,16 @@ export const useEditor = create<EditorStore>()(
           set((s) => {
             s.selectedLayerId = id;
             s.selectedAudioId = null;
+            if (s.cropLayerId !== id) s.cropLayerId = null;
             if (id) {
               const hit = findLayer(s.project, id);
               if (hit) s.selectedSceneId = hit.scene.id;
             }
+          }),
+        setCropLayer: (id) =>
+          set((s) => {
+            s.cropLayerId = id;
+            if (id) s.selectedLayerId = id;
           }),
         selectAudio: (id) =>
           set((s) => {
@@ -173,6 +219,16 @@ export const useEditor = create<EditorStore>()(
           set((s) => {
             const scene = s.project.scenes.find((sc) => sc.id === id);
             if (scene) recipe(scene);
+          }),
+        applyTransitionToAll: (fromSceneId) =>
+          set((s) => {
+            const source = s.project.scenes.find((sc) => sc.id === fromSceneId);
+            if (!source) return;
+            const { kind, durationInFrames } = source.transitionIn;
+            for (const scene of s.project.scenes) {
+              scene.transitionIn.kind = kind;
+              scene.transitionIn.durationInFrames = durationInFrames;
+            }
           }),
 
         addLayer: (layer, sceneId) =>

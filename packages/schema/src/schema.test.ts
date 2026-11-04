@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  createBackground,
   createImageLayer,
   createProject,
   createScene,
+  createShapeLayer,
   createTextLayer,
   duplicateScene,
   getProjectDurationInFrames,
   getSceneAtFrame,
   getSceneTimings,
   ProjectSchema,
+  SceneSchema,
 } from "./index";
 
 describe("factories", () => {
@@ -57,5 +60,54 @@ describe("timing", () => {
   it("retrouve la scène à une frame", () => {
     expect(getSceneAtFrame(scenes, 90)?.id).toBe(scenes[1]?.id);
     expect(getSceneAtFrame(scenes, 200)?.id).toBe(scenes[2]?.id);
+  });
+});
+
+describe("fonds", () => {
+  it("convertit l'ancien dégradé from/to en liste de couleurs", () => {
+    const scene = SceneSchema.parse({
+      id: "scene-legacy",
+      durationInFrames: 30,
+      background: { type: "gradient", from: "#111111", to: "#222222", angle: 90 },
+    });
+    expect(scene.background).toMatchObject({
+      type: "gradient",
+      kind: "linear",
+      colors: ["#111111", "#222222"],
+      angle: 90,
+    });
+    expect(scene.background.type === "gradient" && scene.background.motion.enabled).toBe(false);
+  });
+
+  it("remplit les valeurs par défaut des motifs et du voile", () => {
+    const pattern = createBackground({ type: "pattern", base: "#000", ink: "#fff" });
+    expect(pattern).toMatchObject({ type: "pattern", pattern: "dots", size: 60, grain: 0 });
+    const image = createBackground({ type: "image", src: "/files/a.jpg" });
+    expect(image.type === "image" && image.veil).toEqual({
+      enabled: false,
+      color: "#000000",
+      opacity: 0.45,
+      mode: "solid",
+    });
+  });
+
+  it("refuse un dégradé avec moins de 2 ou plus de 6 couleurs", () => {
+    expect(() => createBackground({ type: "gradient", colors: ["#000"] })).toThrow();
+    expect(() => createBackground({ type: "gradient", colors: Array(7).fill("#000") })).toThrow();
+  });
+});
+
+describe("formes", () => {
+  it("ouvre une ancienne forme sans les nouveaux champs", () => {
+    const shape = createShapeLayer({ shape: "heart", fill: "#f43f5e" });
+    expect(shape).toMatchObject({ fillMode: "solid", stroke: { enabled: false, width: 8, style: "solid" } });
+    expect(shape.gradient.colors).toHaveLength(2);
+    expect(shape.dropShadow.enabled).toBe(false);
+  });
+
+  it("accepte les nouvelles formes et refuse les autres", () => {
+    for (const s of ["triangle", "arrow", "burst", "line"])
+      expect(createShapeLayer({ shape: s as never }).shape).toBe(s);
+    expect(() => createShapeLayer({ shape: "licorne" as never })).toThrow();
   });
 });

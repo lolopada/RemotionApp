@@ -44,7 +44,7 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
       createScene({
         name: "Titre",
         durationInFrames: 3 * f.fps,
-        background: { type: "gradient", from: "#1e1b4b", to: "#be185d", angle: 135 },
+        background: { type: "gradient", colors: ["#1e1b4b", "#be185d"], angle: 135 },
         layers: [
           createTextLayer({
             name: "Titre",
@@ -74,7 +74,7 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
       createScene({
         name: "Photo cœur",
         durationInFrames: 4 * f.fps,
-        background: { type: "gradient", from: "#fdf2f8", to: "#fbcfe8", angle: 160 },
+        background: { type: "gradient", colors: ["#fdf2f8", "#fbcfe8"], angle: 160 },
         transitionIn: { kind: "fade", durationInFrames: 20 },
         layers: [
           createImageLayer({
@@ -149,7 +149,7 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
       createScene({
         name: "Fin",
         durationInFrames: 3 * f.fps,
-        background: { type: "gradient", from: "#0f172a", to: "#312e81", angle: 180 },
+        background: { type: "gradient", colors: ["#0f172a", "#312e81"], angle: 180 },
         transitionIn: { kind: "fade", durationInFrames: 24 },
         layers: [
           createShapeLayer({

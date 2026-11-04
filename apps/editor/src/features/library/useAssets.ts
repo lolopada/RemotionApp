@@ -2,8 +2,8 @@ import type { StoredFile } from "@app/schema";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 
-/** Médias du compte (photos ou musiques), avec envoi et suppression. */
-export function useAssets(kind: "image" | "audio") {
+/** Médias du compte (photos, musiques ou vidéos), avec envoi et suppression. */
+export function useAssets(kind: "image" | "audio" | "video") {
   const [assets, setAssets] = useState<StoredFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);

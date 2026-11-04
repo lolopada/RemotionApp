@@ -10,8 +10,11 @@ import { openDb } from "./db";
 import { authRoutes } from "./routes/auth";
 import { assetRoutes, videoRoutes } from "./routes/files";
 import { projectRoutes } from "./routes/projects";
+import { templateRoutes } from "./routes/templates";
 import { createFileStore } from "./storage/fileStore";
 import { createProjectStore } from "./storage/projectStore";
+import { createTemplateStore } from "./storage/templateStore";
+import { createVersionStore } from "./storage/versionStore";
 
 /**
  * Construit l'application (séparé de index.ts pour pouvoir la tester).
@@ -19,15 +22,26 @@ import { createProjectStore } from "./storage/projectStore";
  * projets, les médias et les vidéos exportées.
  */
 export function createApp(
-  config: Pick<AppConfig, "dataDir" | "maxUploadBytes" | "maxExportBytes" | "allowSignup" | "sessionDays">,
+  config: Pick<
+    AppConfig,
+    | "dataDir"
+    | "maxUploadBytes"
+    | "maxExportBytes"
+    | "allowSignup"
+    | "sessionDays"
+    | "versionIntervalMs"
+    | "maxAutoVersions"
+  >,
   opts: { log?: boolean } = {},
 ) {
   const db = openDb(path.join(config.dataDir, "montage.db"));
   const filesDir = path.join(config.dataDir, "files");
   mkdirSync(filesDir, { recursive: true });
   const accounts = createAccounts(db, { sessionDays: config.sessionDays });
-  const projects = createProjectStore(db);
+  const versions = createVersionStore(db, { intervalMs: config.versionIntervalMs, maxAuto: config.maxAutoVersions });
+  const projects = createProjectStore(db, versions);
   const files = createFileStore(db, filesDir);
+  const templates = createTemplateStore(db);
   const auth = requireUser(accounts);
 
   const app = new Hono<AppEnv>();
@@ -40,9 +54,11 @@ export function createApp(
   app.use("/api/projects/*", auth);
   app.use("/api/assets/*", auth);
   app.use("/api/videos/*", auth);
-  app.route("/api/projects", projectRoutes(projects));
+  app.use("/api/templates/*", auth);
+  app.route("/api/projects", projectRoutes(projects, versions));
   app.route("/api/assets", assetRoutes(files, config.maxUploadBytes));
   app.route("/api/videos", videoRoutes(files, config.maxExportBytes));
+  app.route("/api/templates", templateRoutes(templates));
 
   // Fichiers privés : servis uniquement à leur propriétaire (cookie de session).
   // serveStatic gère les requêtes Range (lecture/avance rapide des vidéos).

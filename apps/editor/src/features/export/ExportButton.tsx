@@ -1,13 +1,26 @@
 import type { StoredFile } from "@app/schema";
 import { framesToSeconds, getProjectDurationInFrames } from "@app/schema";
+import clsx from "clsx";
 import { CheckCircle2, Download, LoaderCircle, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { Popover } from "../../components/Popover";
 import { Button } from "../../components/ui";
 import { api } from "../../lib/api";
 import { downloadBlob } from "../../lib/media";
 import { navigate } from "../../lib/router";
 import { useEditor } from "../../store/editorStore";
 import { playerRef } from "../preview/playerController";
+import { EXPORT_QUALITIES, type ExportQuality, exportScale, exportSize } from "./quality";
+
+const QUALITY_KEY = "export-quality";
+const readQuality = (): ExportQuality => {
+  try {
+    const v = localStorage.getItem(QUALITY_KEY);
+    return EXPORT_QUALITIES.some((q) => q.id === v) ? (v as ExportQuality) : "1080p";
+  } catch {
+    return "1080p";
+  }
+};
 
 type State =
   | { status: "idle" }
@@ -23,9 +36,24 @@ type State =
 export function ExportButton() {
   const [state, setState] = useState<State>({ status: "idle" });
   const abort = useRef<AbortController | null>(null);
+  const [quality, setQuality] = useState<ExportQuality>(readQuality);
+  const width = useEditor((s) => s.project.width);
+  const height = useEditor((s) => s.project.height);
+  const fps = useEditor((s) => s.project.fps);
+
+  const chooseQuality = (q: ExportQuality) => {
+    setQuality(q);
+    try {
+      localStorage.setItem(QUALITY_KEY, q);
+    } catch {
+      // stockage indisponible : le choix vaut pour cette session seulement
+    }
+  };
 
   const start = async () => {
     const { project } = useEditor.getState();
+    const scale = exportScale(project.width, project.height, quality);
+    const size = exportSize(project.width, project.height, quality);
     playerRef.current?.pause();
     abort.current = new AbortController();
     setState({ status: "rendering", progress: 0 });
@@ -34,6 +62,7 @@ export function ExportButton() {
       // Chargé à la demande : le moteur d'export est lourd, inutile au démarrage.
       const { exportVideo } = await import("./exportVideo");
       blob = await exportVideo(project, {
+        scale,
         signal: abort.current.signal,
         onProgress: (progress) => setState({ status: "rendering", progress }),
       });
@@ -52,8 +81,8 @@ export function ExportButton() {
         {
           name,
           projectId: project.id,
-          width: project.width,
-          height: project.height,
+          width: size.width,
+          height: size.height,
           duration: framesToSeconds(getProjectDurationInFrames(project), project.fps),
         },
         (progress) => setState({ status: "uploading", progress }),
@@ -88,10 +117,58 @@ export function ExportButton() {
 
   return (
     <div className="relative">
-      <Button variant="primary" onClick={() => void start()}>
-        <Download size={15} />
-        Exporter MP4
-      </Button>
+      <Popover
+        className="w-64 p-2"
+        trigger={({ toggle }) => (
+          <Button variant="primary" onClick={toggle}>
+            <Download size={15} />
+            Exporter MP4
+          </Button>
+        )}
+      >
+        {(close) => (
+          <div className="space-y-2 p-1">
+            <p className="text-[11px] text-ink-faint uppercase tracking-wider">Qualité</p>
+            <div className="grid gap-1">
+              {EXPORT_QUALITIES.map((q) => {
+                const size = exportSize(width, height, q.id);
+                return (
+                  <button
+                    type="button"
+                    key={q.id}
+                    onClick={() => chooseQuality(q.id)}
+                    className={clsx(
+                      "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-xs transition",
+                      quality === q.id
+                        ? "border-accent bg-accent-soft text-ink"
+                        : "border-line text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    <span>{q.label}</span>
+                    <span className="text-[10px] text-ink-faint tabular-nums">
+                      {size.width} × {size.height}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-ink-faint leading-snug">
+              {fps} images/s. La 4K prend nettement plus de temps et n'est pas gérée par tous les navigateurs.
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                close();
+                void start();
+              }}
+            >
+              Lancer l'export
+            </Button>
+          </div>
+        )}
+      </Popover>
       {state.status === "error" || state.status === "done" ? (
         <div className="absolute top-10 right-0 z-20 w-80 rounded-lg border border-line bg-panel p-3 text-xs shadow-2xl shadow-black/50">
           {state.status === "error" ? (

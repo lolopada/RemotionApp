@@ -195,3 +195,33 @@ export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: 
     />
   );
 }
+
+/** Choix exclusif en boutons collés (ex. : gauche / centre / droite). */
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: ReactNode; title: string }[];
+}) {
+  return (
+    <div className="flex rounded-md border border-line bg-canvas p-0.5">
+      {options.map((o) => (
+        <button
+          type="button"
+          key={o.value}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+          className={clsx(
+            "flex h-6 flex-1 items-center justify-center rounded text-xs transition",
+            value === o.value ? "bg-panel-hover text-ink" : "text-ink-faint hover:text-ink",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}

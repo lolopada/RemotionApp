@@ -1,11 +1,14 @@
 import clsx from "clsx";
-import { Image, LayoutTemplate, Music, Palette, Shapes } from "lucide-react";
+import { Clapperboard, Image, LayoutTemplate, Music, Palette, Proportions, Shapes, SwatchBook } from "lucide-react";
 import { type ComponentType, useState } from "react";
 import { AudioTab } from "./AudioTab";
 import { BackgroundsTab } from "./BackgroundsTab";
 import { ElementsTab } from "./ElementsTab";
+import { FormatTab } from "./FormatTab";
 import { MediaTab } from "./MediaTab";
 import { TemplatesTab } from "./TemplatesTab";
+import { ThemeTab } from "./ThemeTab";
+import { VideoTab } from "./VideoTab";
 
 /**
  * Bibliothèque (panneau gauche). Chaque onglet est un composant
@@ -15,8 +18,11 @@ const TABS: { id: string; label: string; icon: ComponentType<{ size?: number }>;
   { id: "templates", label: "Modèles", icon: LayoutTemplate, Panel: TemplatesTab },
   { id: "elements", label: "Éléments", icon: Shapes, Panel: ElementsTab },
   { id: "media", label: "Photos", icon: Image, Panel: MediaTab },
+  { id: "video", label: "Vidéos", icon: Clapperboard, Panel: VideoTab },
   { id: "backgrounds", label: "Fonds", icon: Palette, Panel: BackgroundsTab },
   { id: "audio", label: "Musique", icon: Music, Panel: AudioTab },
+  { id: "theme", label: "Thème", icon: SwatchBook, Panel: ThemeTab },
+  { id: "format", label: "Format", icon: Proportions, Panel: FormatTab },
 ];
 
 export function LibraryPanel() {

@@ -1,26 +1,32 @@
 import { TRANSITION_LABELS } from "@app/composition";
-import { type Background, framesToSeconds, type Scene, secondsToFrames, type TransitionKind } from "@app/schema";
+import { framesToSeconds, type Scene, secondsToFrames, type TransitionKind } from "@app/schema";
 import clsx from "clsx";
-import { ChevronDown, ChevronUp, Eye, EyeOff, Image, Lock, Shapes, Type } from "lucide-react";
-import { ColorInput, Field, IconButton, NumberInput, Section, Select, Slider, TextInput } from "../../components/ui";
+import {
+  BookmarkPlus,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clapperboard,
+  Eye,
+  EyeOff,
+  Image,
+  Lock,
+  Shapes,
+  Type,
+} from "lucide-react";
+import { useState } from "react";
+import { Button, Field, IconButton, NumberInput, Section, Select, TextInput } from "../../components/ui";
 import { useEditor, useProject } from "../../store/editorStore";
+import { useMyTemplates } from "../library/useMyTemplates";
+import { BackgroundEditor } from "./BackgroundEditor";
 
-const LAYER_ICONS = { image: Image, text: Type, shape: Shapes } as const;
+const LAYER_ICONS = { image: Image, text: Type, shape: Shapes, video: Clapperboard } as const;
 
 export function SceneInspector({ scene }: { scene: Scene }) {
   const project = useProject();
-  const { updateScene, selectLayer, moveLayer, updateLayer } = useEditor.getState();
+  const { updateScene, selectLayer, moveLayer, updateLayer, applyTransitionToAll } = useEditor.getState();
   const isFirst = project.scenes[0]?.id === scene.id;
   const update = (fn: (s: Scene) => void) => updateScene(scene.id, fn);
-  const bg = scene.background;
-
-  const setBgType = (type: Background["type"]) =>
-    update((s) => {
-      if (type === s.background.type) return;
-      if (type === "color") s.background = { type: "color", color: "#111827" };
-      if (type === "gradient") s.background = { type: "gradient", from: "#1e1b4b", to: "#7c3aed", angle: 135 };
-      if (type === "image") s.background = { type: "image", src: "", blur: 0 };
-    });
 
   return (
     <div>
@@ -39,70 +45,7 @@ export function SceneInspector({ scene }: { scene: Scene }) {
         </Field>
       </Section>
 
-      <Section title="Fond">
-        <Field label="Type">
-          <Select
-            value={bg.type}
-            onChange={setBgType}
-            options={[
-              { value: "color", label: "Couleur" },
-              { value: "gradient", label: "Dégradé" },
-              { value: "image", label: "Photo" },
-            ]}
-          />
-        </Field>
-        {bg.type === "color" ? (
-          <Field label="Couleur">
-            <ColorInput
-              value={bg.color}
-              onChange={(v) => update((s) => void (s.background.type === "color" && (s.background.color = v)))}
-            />
-          </Field>
-        ) : null}
-        {bg.type === "gradient" ? (
-          <>
-            <Field label="Début">
-              <ColorInput
-                value={bg.from}
-                onChange={(v) => update((s) => void (s.background.type === "gradient" && (s.background.from = v)))}
-              />
-            </Field>
-            <Field label="Fin">
-              <ColorInput
-                value={bg.to}
-                onChange={(v) => update((s) => void (s.background.type === "gradient" && (s.background.to = v)))}
-              />
-            </Field>
-            <Field label="Angle">
-              <Slider
-                value={bg.angle}
-                min={0}
-                max={360}
-                step={1}
-                format={(v) => `${v}°`}
-                onChange={(v) => update((s) => void (s.background.type === "gradient" && (s.background.angle = v)))}
-              />
-            </Field>
-          </>
-        ) : null}
-        {bg.type === "image" ? (
-          <>
-            <p className="text-[11px] text-ink-faint">
-              {bg.src ? "Photo choisie." : "Onglet Photos → « En fond » sur une photo."}
-            </p>
-            <Field label="Flou">
-              <Slider
-                value={bg.blur}
-                min={0}
-                max={60}
-                step={1}
-                format={(v) => `${v}px`}
-                onChange={(v) => update((s) => void (s.background.type === "image" && (s.background.blur = v)))}
-              />
-            </Field>
-          </>
-        ) : null}
-      </Section>
+      <BackgroundEditor scene={scene} update={update} />
 
       <Section title="Transition d'entrée">
         {isFirst ? (
@@ -130,9 +73,20 @@ export function SceneInspector({ scene }: { scene: Scene }) {
                 }
               />
             </Field>
+            {project.scenes.length > 2 ? (
+              <button
+                type="button"
+                onClick={() => applyTransitionToAll(scene.id)}
+                className="w-full rounded-md border border-line px-2 py-1.5 text-xs text-ink-muted transition hover:border-accent hover:text-ink"
+              >
+                Appliquer à toutes les scènes
+              </button>
+            ) : null}
           </>
         )}
       </Section>
+
+      <SaveAsTemplate scene={scene} />
 
       <Section title={`Calques (${scene.layers.length})`}>
         {scene.layers.length === 0 ? (
@@ -187,5 +141,75 @@ export function SceneInspector({ scene }: { scene: Scene }) {
         </ul>
       </Section>
     </div>
+  );
+}
+
+/** Enregistre la scène dans « Mes modèles » (compte), pour la réutiliser dans n'importe quel projet. */
+function SaveAsTemplate({ scene }: { scene: Scene }) {
+  const project = useProject();
+  const save = useMyTemplates((s) => s.save);
+  const [name, setName] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ kind: "saving" | "saved" | "error"; message?: string } | null>(null);
+
+  const submit = async () => {
+    if (!name?.trim()) return;
+    setStatus({ kind: "saving" });
+    try {
+      await save(name.trim(), structuredClone(scene), {
+        width: project.width,
+        height: project.height,
+        fps: project.fps,
+      });
+      setName(null);
+      setStatus({ kind: "saved" });
+      setTimeout(() => setStatus((s) => (s?.kind === "saved" ? null : s)), 3000);
+    } catch (err) {
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Enregistrement impossible" });
+    }
+  };
+
+  return (
+    <Section title="Mes modèles">
+      {name === null ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setName(scene.name || "Ma scène");
+              setStatus(null);
+            }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-ink-muted text-xs transition hover:border-accent hover:text-ink"
+          >
+            <BookmarkPlus size={13} /> Enregistrer comme modèle
+          </button>
+          {status?.kind === "saved" ? (
+            <p className="flex items-center gap-1 text-[11px] text-emerald-300">
+              <Check size={12} /> Ajouté à « Mes modèles » (onglet Modèles).
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Field label="Nom">
+            <TextInput value={name} onChange={setName} />
+          </Field>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              className="flex-1"
+              disabled={!name.trim() || status?.kind === "saving"}
+              onClick={() => void submit()}
+            >
+              Enregistrer
+            </Button>
+            <Button size="sm" onClick={() => setName(null)}>
+              Annuler
+            </Button>
+          </div>
+          {status?.kind === "error" ? <p className="text-[11px] text-red-300">{status.message}</p> : null}
+        </>
+      )}
+    </Section>
   );
 }

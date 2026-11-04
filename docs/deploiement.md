@@ -1,5 +1,51 @@
 # Déploiement sur ton serveur
 
+## Installation rapide (conteneur Debian/Ubuntu, derrière Nginx Proxy Manager)
+
+Copie le dépôt dans la CT (par exemple `rsync -a --exclude node_modules --exclude dist --exclude data ./ root@IP-CT:/root/montage-src/`),
+puis, **dans la CT, en root** :
+
+```bash
+cd /root/montage-src
+./deploy/install.sh --domain montage.paada.fr
+```
+
+Le script installe Node ≥ 22.13 et pnpm si besoin, crée l'utilisateur `montage`, construit l'éditeur,
+écrit `/etc/montage.env`, installe le service systemd et la sauvegarde quotidienne (03h30, 14 jours
+gardés), puis vérifie que l'API répond. **Pour mettre à jour : recopie le nouveau code et relance la
+même commande** (sauvegarde automatique avant, configuration et données conservées).
+Options : `--source DIR`, `--port N`, `--data-dir DIR`, `--closed` (inscriptions fermées dès le départ).
+
+Réglages de Nginx Proxy Manager (Proxy Host → SSL : Let's Encrypt, Force SSL, HTTP/2 ; onglet _Advanced_) :
+
+```nginx
+client_max_body_size 2g;
+proxy_request_buffering off;
+proxy_buffering off;
+proxy_read_timeout 900s;
+proxy_send_timeout 900s;
+send_timeout 900s;
+```
+
+### Vérifier que tout marche
+
+| Outil                                                                            | Où                       | Rôle                                                                      |
+| -------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `montage-doctor`                                                                 | dans la CT               | service, port, Node, base SQLite, disque, sauvegardes, erreurs du journal |
+| `node deploy/smoke-test.mjs https://montage.paada.fr --user test --password '…'` | n'importe où (Node ≥ 22) | test complet de bout en bout à travers NPM                                |
+
+Le test complet couvre : certificat et redirection HTTPS, éditeur et type MIME du JavaScript, refus sans
+connexion, protection CSRF, cookie `Secure`, projets/versions/modèles, photos et musiques, fichiers privés
+(accès refusé aux autres comptes, requêtes `Range`), envoi d'un gros MP4 avec empreinte SHA-256, limite
+des essais de connexion. Options : `--big-mb 300` (vérifie `client_max_body_size` et les délais de NPM),
+`--browser` (ajoute un **vrai export vidéo** dans Chromium : `mkdir ~/e2e && cd ~/e2e && npm i playwright
+&& npx playwright install chromium --with-deps`, puis lance le test depuis ce dossier),
+`--user2/--password2` (test d'isolation entre deux comptes quand les inscriptions sont fermées),
+`--no-ratelimit`. Code de sortie 1 s'il y a un échec. Utilise un compte dédié (`--user`) : sans lui, un compte
+`smoke-xxxx` est créé et reste en base.
+
+Les sections suivantes détaillent la même installation, à la main.
+
 Le serveur de prod sert l'éditeur et l'API sur un seul port. Il ne fait aucun
 rendu vidéo : quelques dizaines de Mo de RAM suffisent. Il faut Node 22.13 ou
 plus (pour la base SQLite intégrée `node:sqlite`).
@@ -14,16 +60,18 @@ PORT=3001 DATA_DIR=/srv/montage/data pnpm start
 
 Variables d'environnement (voir `.env.example`) :
 
-| Variable        | Défaut             | Rôle                                |
-| --------------- | ------------------ | ----------------------------------- |
-| `PORT`          | `3001`             | port HTTP                           |
-| `HOST`          | `0.0.0.0`          | interface d'écoute                  |
-| `DATA_DIR`      | `./data`           | base + fichiers (**à sauvegarder**) |
-| `MAX_UPLOAD_MB` | `200`              | taille max d'une photo / musique    |
-| `MAX_EXPORT_MB` | `2048`             | taille max d'une vidéo exportée     |
-| `ALLOW_SIGNUP`  | `true`             | `false` = plus de nouveaux comptes  |
-| `SESSION_DAYS`  | `60`               | durée de connexion sans activité    |
-| `EDITOR_DIST`   | `apps/editor/dist` | build de l'éditeur à servir         |
+| Variable                   | Défaut             | Rôle                                |
+| -------------------------- | ------------------ | ----------------------------------- |
+| `PORT`                     | `3001`             | port HTTP                           |
+| `HOST`                     | `0.0.0.0`          | interface d'écoute                  |
+| `DATA_DIR`                 | `./data`           | base + fichiers (**à sauvegarder**) |
+| `MAX_UPLOAD_MB`            | `200`              | taille max d'une photo / musique    |
+| `MAX_EXPORT_MB`            | `2048`             | taille max d'une vidéo exportée     |
+| `ALLOW_SIGNUP`             | `true`             | `false` = plus de nouveaux comptes  |
+| `SESSION_DAYS`             | `60`               | durée de connexion sans activité    |
+| `VERSION_INTERVAL_MINUTES` | `10`               | écart min. entre deux versions auto |
+| `MAX_AUTO_VERSIONS`        | `50`               | versions auto gardées par projet    |
+| `EDITOR_DIST`              | `apps/editor/dist` | build de l'éditeur à servir         |
 
 ## 2. HTTPS (obligatoire pour l'export)
 

@@ -1,4 +1,4 @@
-import type { FileKind, Project, ProjectSummary, StoredFile, User } from "@app/schema";
+import type { FileKind, Project, ProjectSummary, ProjectVersion, SceneTemplate, StoredFile, User } from "@app/schema";
 
 /**
  * Client de l'API (même origine : proxy Vite en dev, même serveur en prod).
@@ -60,6 +60,19 @@ export const api = {
     request<Project>(`/api/projects/${project.id}`, { ...json("PUT", project), keepalive: opts.keepalive }),
   deleteProject: (id: string) => request<void>(`/api/projects/${id}`, { method: "DELETE" }),
 
+  // --- Historique des versions
+  listVersions: (projectId: string) => request<ProjectVersion[]>(`/api/projects/${projectId}/versions`),
+  getVersion: (projectId: string, versionId: string) =>
+    request<Project>(`/api/projects/${projectId}/versions/${versionId}`),
+  createVersion: (projectId: string, label: string | null) =>
+    request<ProjectVersion>(`/api/projects/${projectId}/versions`, json("POST", { label })),
+  labelVersion: (projectId: string, versionId: string, label: string) =>
+    request<ProjectVersion>(`/api/projects/${projectId}/versions/${versionId}`, json("PATCH", { label })),
+  deleteVersion: (projectId: string, versionId: string) =>
+    request<void>(`/api/projects/${projectId}/versions/${versionId}`, { method: "DELETE" }),
+  restoreVersion: (projectId: string, versionId: string) =>
+    request<Project>(`/api/projects/${projectId}/versions/${versionId}/restore`, { method: "POST" }),
+
   // --- Médias importés
   listAssets: (kind?: Exclude<FileKind, "export">) =>
     request<StoredFile[]>(`/api/assets${kind ? `?kind=${kind}` : ""}`),
@@ -69,6 +82,13 @@ export const api = {
     return request<StoredFile>("/api/assets", { method: "POST", body: form });
   },
   deleteAsset: (id: string) => request<void>(`/api/assets/${id}`, { method: "DELETE" }),
+
+  // --- Mes modèles (scènes réutilisables)
+  listTemplates: () => request<SceneTemplate[]>("/api/templates"),
+  createTemplate: (t: Omit<SceneTemplate, "id" | "createdAt">) =>
+    request<SceneTemplate>("/api/templates", json("POST", t)),
+  renameTemplate: (id: string, name: string) => request<SceneTemplate>(`/api/templates/${id}`, json("PATCH", { name })),
+  deleteTemplate: (id: string) => request<void>(`/api/templates/${id}`, { method: "DELETE" }),
 
   // --- Vidéos exportées
   listVideos: () => request<StoredFile[]>("/api/videos"),

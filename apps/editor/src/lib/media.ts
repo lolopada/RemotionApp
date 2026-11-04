@@ -19,6 +19,23 @@ export function getImageSize(src: string): Promise<{ width: number; height: numb
   });
 }
 
+/** Dimensions et durée d'une vidéo (lues dans ses métadonnées). */
+export function getVideoMeta(src: string): Promise<{ width: number; height: number; duration: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.onloadedmetadata = () =>
+      resolve({
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+      });
+    video.onerror = () => reject(new Error("Impossible de lire cette vidéo"));
+    video.src = src;
+  });
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

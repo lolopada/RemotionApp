@@ -1,20 +1,29 @@
-import { getProjectDurationInFrames, type Project, ProjectSchema, type ProjectSummary } from "@app/schema";
+import {
+  getProjectDurationInFrames,
+  type Project,
+  ProjectSchema,
+  type ProjectSummary,
+  type Scene,
+  SceneSchema,
+} from "@app/schema";
 import type { Db } from "../db";
+import type { VersionStore } from "./versionStore";
 
 export class NotOwnerError extends Error {}
 
 /**
  * Projets en SQLite : le JSON complet dans `data`, plus quelques colonnes
  * calculées pour afficher la liste sans tout relire.
+ * Chaque enregistrement peut d'abord garder l'ancien état dans l'historique.
  */
-export function createProjectStore(db: Db) {
+export function createProjectStore(db: Db, versions: VersionStore) {
   const q = {
     list: db.prepare(
       `SELECT id, name, created_at, updated_at, width, height, fps, scene_count, duration_frames, preview_scene
        FROM projects WHERE user_id = ? ORDER BY updated_at DESC`,
     ),
     get: db.prepare("SELECT data FROM projects WHERE id = ? AND user_id = ?"),
-    owner: db.prepare("SELECT user_id FROM projects WHERE id = ?"),
+    current: db.prepare("SELECT user_id, data FROM projects WHERE id = ?"),
     upsert: db.prepare(
       `INSERT INTO projects (id, user_id, name, data, width, height, fps, scene_count, duration_frames, preview_scene, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -40,6 +49,30 @@ export function createProjectStore(db: Db) {
     preview_scene: string | null;
   };
 
+  function write(userId: string, p: Project) {
+    q.upsert.run(
+      p.id,
+      userId,
+      p.name,
+      JSON.stringify(p),
+      p.width,
+      p.height,
+      p.fps,
+      p.scenes.length,
+      getProjectDurationInFrames(p),
+      p.scenes[0] ? JSON.stringify(p.scenes[0]) : null,
+      p.createdAt,
+      p.updatedAt,
+    );
+  }
+
+  /** Vignette : repasse par le schéma, sinon un ancien projet n'a pas les champs ajoutés depuis. */
+  const readPreview = (json: string | null): Scene | null => {
+    if (!json) return null;
+    const parsed = SceneSchema.safeParse(JSON.parse(json));
+    return parsed.success ? parsed.data : null;
+  };
+
   return {
     list(userId: string): ProjectSummary[] {
       return (q.list.all(userId) as Row[]).map((r) => ({
@@ -52,7 +85,7 @@ export function createProjectStore(db: Db) {
         fps: r.fps,
         sceneCount: r.scene_count,
         durationInFrames: r.duration_frames,
-        previewScene: r.preview_scene ? JSON.parse(r.preview_scene) : null,
+        previewScene: readPreview(r.preview_scene),
       }));
     },
 
@@ -66,25 +99,51 @@ export function createProjectStore(db: Db) {
 
     /** Crée ou met à jour. Refuse d'écraser le projet d'un autre utilisateur. */
     save(userId: string, project: Project): Project {
-      const owner = q.owner.get(project.id) as { user_id: string } | undefined;
-      if (owner && owner.user_id !== userId) throw new NotOwnerError();
+      const current = q.current.get(project.id) as { user_id: string; data: string } | undefined;
+      if (current && current.user_id !== userId) throw new NotOwnerError();
       const now = new Date().toISOString();
-      const saved: Project = { ...project, updatedAt: now, createdAt: owner ? project.createdAt : now };
-      q.upsert.run(
-        saved.id,
-        userId,
-        saved.name,
-        JSON.stringify(saved),
-        saved.width,
-        saved.height,
-        saved.fps,
-        saved.scenes.length,
-        getProjectDurationInFrames(saved),
-        saved.scenes[0] ? JSON.stringify(saved.scenes[0]) : null,
-        saved.createdAt,
-        saved.updatedAt,
-      );
+      const saved: Project = { ...project, updatedAt: now, createdAt: current ? project.createdAt : now };
+
+      db.exec("BEGIN");
+      try {
+        if (current) {
+          const previous = ProjectSchema.safeParse(JSON.parse(current.data));
+          if (previous.success) versions.autoSnapshot(previous.data);
+        }
+        write(userId, saved);
+        db.exec("COMMIT");
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
       return saved;
+    },
+
+    /** Crée une version nommée de l'état actuel du projet. */
+    createVersion(userId: string, id: string, label: string | null) {
+      const project = this.get(userId, id);
+      return project ? versions.create(project, "manual", label) : null;
+    },
+
+    /**
+     * Remet le projet dans l'état d'une version. L'état actuel est d'abord
+     * gardé (« avant restauration ») : une restauration s'annule comme une autre.
+     */
+    restore(userId: string, id: string, versionId: string): Project | null {
+      const current = this.get(userId, id);
+      const target = versions.getProject(userId, id, versionId);
+      if (!current || !target) return null;
+      const restored: Project = { ...target, id, createdAt: current.createdAt, updatedAt: new Date().toISOString() };
+      db.exec("BEGIN");
+      try {
+        versions.create(current, "before-restore", null);
+        write(userId, restored);
+        db.exec("COMMIT");
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+      return restored;
     },
 
     remove(userId: string, id: string): boolean {

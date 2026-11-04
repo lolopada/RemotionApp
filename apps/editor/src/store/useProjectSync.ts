@@ -1,5 +1,5 @@
 import { type Project, ProjectSchema } from "@app/schema";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { setBeforeNavigate } from "../lib/router";
 import { local } from "../lib/storage";
@@ -126,9 +126,17 @@ export type SyncState =
   | { status: "notfound" }
   | { status: "error"; message: string };
 
-export function useProjectSync(projectId: string): SyncState {
+/**
+ * `revision` : changer cette valeur recharge le projet depuis le serveur
+ * (après une restauration de version, par exemple).
+ * `flush` : envoie tout de suite ce qui n'est pas encore enregistré.
+ */
+export function useProjectSync(projectId: string, revision = 0) {
   const [state, setState] = useState<SyncState>({ status: "loading" });
+  const saverRef = useRef<ReturnType<typeof createSaver> | null>(null);
+  const flush = useCallback(() => saverRef.current?.flush() ?? Promise.resolve(), []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision sert justement à relancer le chargement
   useEffect(() => {
     let cancelled = false;
     let saver: ReturnType<typeof createSaver> | null = null;
@@ -167,6 +175,7 @@ export function useProjectSync(projectId: string): SyncState {
       setSaveStatus("saved");
 
       saver = createSaver(projectId, server.updatedAt);
+      saverRef.current = saver;
       if (restore) saver.markDirty();
       unsubscribe = useEditor.subscribe((s, prev) => {
         if (s.project !== prev.project) saver?.onChange(s.project);
@@ -181,6 +190,7 @@ export function useProjectSync(projectId: string): SyncState {
 
     return () => {
       cancelled = true;
+      saverRef.current = null;
       unsubscribe();
       void saver?.flush();
       saver?.stop();
@@ -190,7 +200,7 @@ export function useProjectSync(projectId: string): SyncState {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("online", onOnline);
     };
-  }, [projectId]);
+  }, [projectId, revision]);
 
-  return state;
+  return { state, flush };
 }

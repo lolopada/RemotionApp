@@ -21,6 +21,10 @@ export const config = {
   /** false = plus de création de compte (les comptes existants marchent toujours). */
   allowSignup: (env.ALLOW_SIGNUP ?? "true") !== "false",
   sessionDays: Number(env.SESSION_DAYS ?? 60),
+  /** Écart minimum entre deux versions automatiques d'un projet. */
+  versionIntervalMs: Number(env.VERSION_INTERVAL_MINUTES ?? 10) * 60_000,
+  /** Versions automatiques gardées par projet (les versions nommées sont toujours gardées). */
+  maxAutoVersions: Number(env.MAX_AUTO_VERSIONS ?? 50),
 };
 
 export type AppConfig = typeof config;

@@ -59,6 +59,38 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX files_user ON files(user_id, kind, created_at DESC);
   `,
+  // 2 — Historique des versions des projets.
+  `
+  CREATE TABLE project_versions (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,      -- auto | manual | before-restore
+    label           TEXT,
+    name            TEXT NOT NULL,
+    scene_count     INTEGER NOT NULL,
+    duration_frames INTEGER NOT NULL,
+    fps             INTEGER NOT NULL,
+    hash            TEXT NOT NULL,      -- empreinte du contenu (évite les doublons)
+    data            BLOB NOT NULL,      -- JSON du projet compressé (gzip)
+    size            INTEGER NOT NULL,   -- taille du JSON non compressé
+    created_at      TEXT NOT NULL
+  );
+  CREATE INDEX project_versions_project ON project_versions(project_id, created_at DESC);
+  `,
+  // 3 — « Mes modèles » : scènes enregistrées par l'utilisateur pour les réutiliser.
+  `
+  CREATE TABLE scene_templates (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    data       TEXT NOT NULL,      -- JSON de la scène
+    width      INTEGER NOT NULL,   -- format et cadence du projet d'origine
+    height     INTEGER NOT NULL,
+    fps        INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX scene_templates_user ON scene_templates(user_id, created_at DESC);
+  `,
 ];
 
 export function openDb(file: string): Db {

@@ -18,6 +18,8 @@ export function LayerFrame({
 }) {
   const { x, y, width, height, rotation, opacity } = layer.transform;
   const anim = useLayerAnimation(layer.animation, sceneDurationInFrames);
+  // Pas encore apparu, ou déjà disparu.
+  if (anim.hidden) return null;
 
   return (
     <div
@@ -31,6 +33,9 @@ export function LayerFrame({
         opacity: opacity * anim.opacity,
         transform: `rotate(${rotation}deg) ${anim.transform}`,
         transformOrigin: "50% 50%",
+        filter: anim.filter,
+        clipPath: anim.clipPath,
+        mixBlendMode: layer.blendMode === "normal" ? undefined : layer.blendMode,
       }}
     >
       {children}

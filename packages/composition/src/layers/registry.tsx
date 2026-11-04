@@ -5,6 +5,7 @@ import { LayerFrame } from "./LayerFrame";
 import { ShapeLayerView } from "./ShapeLayerView";
 import { TextLayerView } from "./TextLayerView";
 import type { LayerViewProps } from "./types";
+import { VideoLayerView } from "./VideoLayerView";
 
 type Registry = { [K in LayerType]: ComponentType<LayerViewProps<Extract<Layer, { type: K }>>> };
 
@@ -16,6 +17,7 @@ export const layerRenderers: Registry = {
   image: ImageLayerView,
   text: TextLayerView,
   shape: ShapeLayerView,
+  video: VideoLayerView,
 };
 
 export function LayerView({ layer, sceneDurationInFrames }: LayerViewProps) {
