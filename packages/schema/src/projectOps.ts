@@ -133,6 +133,48 @@ export function retimeScene(scene: Scene, ratio: number): void {
 }
 
 /** Change la cadence (images par seconde) sans changer les durées réelles. Mute le projet. */
+/** Quelles pages reçoivent la durée : toutes, toutes sauf la première et la dernière, ou une liste. */
+export type DurationScope = "all" | "inner" | "selected";
+
+/**
+ * Frames minimum pour qu'une vidéo posée sur la page soit vue en entier
+ * (début d'apparition + durée du fichier, hors boucle). 1 si la page n'a pas de vidéo.
+ */
+export function minFramesForVideos(scene: Scene, fps: number): number {
+  let need = 1;
+  for (const layer of scene.layers) {
+    if (layer.type !== "video" || layer.sourceDurationSeconds === null) continue;
+    const played = layer.sourceDurationSeconds * fps - layer.trimStartFrames;
+    need = Math.max(need, Math.ceil(layer.animation.enterDelayInFrames + played / layer.playbackRate));
+  }
+  return need;
+}
+
+/**
+ * Donne la même durée (en secondes) à plusieurs pages d'un coup. Une page avec une vidéo
+ * n'est jamais raccourcie sous la durée de sa vidéo : elle est comptée dans `keptLonger`.
+ */
+export function setScenesDuration(
+  project: Project,
+  seconds: number,
+  scope: DurationScope,
+  selectedIds: readonly string[] = [],
+): { changed: number; keptLonger: number } {
+  const frames = Math.max(1, Math.round(seconds * project.fps));
+  const last = project.scenes.length - 1;
+  let changed = 0;
+  let keptLonger = 0;
+  project.scenes.forEach((scene, i) => {
+    const hit = scope === "all" || (scope === "inner" ? i > 0 && i < last : selectedIds.includes(scene.id));
+    if (!hit) return;
+    const target = Math.max(frames, minFramesForVideos(scene, project.fps));
+    if (target > frames) keptLonger++;
+    if (scene.durationInFrames !== target) changed++;
+    scene.durationInFrames = target;
+  });
+  return { changed, keptLonger };
+}
+
 export function retimeProject(project: Project, fps: number): void {
   const ratio = fps / project.fps;
   if (ratio === 1) return;

@@ -116,6 +116,16 @@ Le CSS supporté est limité : https://www.remotion.dev/docs/client-side-renderi
 - `relayoutScene` remplace calques + fond et garde id, nom (sauf nom automatique), durée,
   transition. Le contenu relu garde l'ordre des photos (la mise en avant reste n° 1).
 
+## Durée par page (`features/storyboard/DurationBar.tsx`)
+
+- `setScenesDuration` (`packages/schema/src/projectOps.ts`, pur et testé) : toutes / « inner »
+  (sans première ni dernière) / sélection ; ne descend pas sous `minFramesForVideos`. L'action du
+  store `setScenesDuration` en fait une seule étape d'annulation et mémorise (ou non)
+  `project.defaultSceneSeconds` (en secondes, donc indépendant de la cadence).
+- Les nouvelles pages (`proposeAll`/`buildPage` via `PageFormat.sceneSeconds`, « Page vide »)
+  prennent cette durée ; `relayoutScene` garde la durée de la page.
+- Sélection multiple de pages : `extraSceneIds` du store (Ctrl/Cmd + clic, Maj + clic).
+
 ## Ajouter un type de calque
 
 schéma (`layers.ts`) → rendu (`composition/src/layers/registry.tsx`) → réglages

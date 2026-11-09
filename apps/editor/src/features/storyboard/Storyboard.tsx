@@ -8,6 +8,7 @@ import { IconButton } from "../../components/ui";
 import { useEditor, useProject } from "../../store/editorStore";
 import { useLayoutWizard } from "../layouts/wizardStore";
 import { AudioStrip } from "./AudioStrip";
+import { DurationBar } from "./DurationBar";
 
 const THUMB_HEIGHT = 72;
 
@@ -19,7 +20,9 @@ const THUMB_HEIGHT = 72;
 export function Storyboard() {
   const project = useProject();
   const selectedSceneId = useEditor((s) => s.selectedSceneId);
-  const { selectScene, duplicateScene, removeScene, moveScene } = useEditor.getState();
+  const extraSceneIds = useEditor((s) => s.extraSceneIds);
+  const { selectScene, duplicateScene, removeScene, moveScene, toggleSceneSelection, selectSceneRange } =
+    useEditor.getState();
   const openWizard = useLayoutWizard((s) => s.open);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -43,6 +46,8 @@ export function Storyboard() {
           {project.scenes.length} scènes · {framesToSeconds(total, project.fps).toFixed(1)} s
         </span>
       </div>
+
+      <DurationBar />
 
       <div className="flex items-center gap-1 overflow-x-auto px-4 pt-2 pb-2">
         {project.scenes.map((scene, i) => (
@@ -81,10 +86,19 @@ export function Storyboard() {
             >
               <button
                 type="button"
-                onClick={() => selectScene(scene.id)}
+                onClick={(e) => {
+                  if (e.shiftKey) selectSceneRange(scene.id);
+                  else if (e.ctrlKey || e.metaKey) toggleSceneSelection(scene.id);
+                  else selectScene(scene.id);
+                }}
+                aria-pressed={scene.id === selectedSceneId || extraSceneIds.includes(scene.id)}
                 className={clsx(
                   "block overflow-hidden rounded-md ring-2 transition",
-                  scene.id === selectedSceneId ? "ring-accent" : "ring-transparent hover:ring-line",
+                  scene.id === selectedSceneId
+                    ? "ring-accent"
+                    : extraSceneIds.includes(scene.id)
+                      ? "ring-accent/60"
+                      : "ring-transparent hover:ring-line",
                 )}
               >
                 <SceneThumb project={project} scene={scene} width={thumbWidth} />

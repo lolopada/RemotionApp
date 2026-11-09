@@ -84,7 +84,11 @@ function WizardDialog({ request }: { request: WizardRequest }) {
   // Les propositions suivent le contenu sans bloquer la saisie.
   const content = useDeferredValue(items);
   const { width, height, fps, theme } = project;
-  const all = useMemo(() => proposeAll(content, { width, height, fps }, theme), [content, width, height, fps, theme]);
+  const sceneSeconds = project.defaultSceneSeconds;
+  const all = useMemo(
+    () => proposeAll(content, { width, height, fps, sceneSeconds }, theme),
+    [content, width, height, fps, sceneSeconds, theme],
+  );
   const pageCount = Math.max(1, Math.ceil(all.length / PER_PAGE));
   const current = page % pageCount;
   const shown = all.slice(current * PER_PAGE, current * PER_PAGE + PER_PAGE);
@@ -152,7 +156,7 @@ function WizardDialog({ request }: { request: WizardRequest }) {
   };
 
   const blankPage = () => {
-    const scene = createScene({ durationInFrames: 4 * fps });
+    const scene = createScene({ durationInFrames: Math.round((sceneSeconds ?? 4) * fps) });
     if (theme) applyThemeToScene(scene, theme);
     addScene(scene, request.mode === "new" ? request.afterId : undefined);
     close();

@@ -3,6 +3,7 @@ import {
   applyTheme as applyThemeToProject,
   duplicateScene as cloneScene,
   createScene,
+  type DurationScope,
   type FrameSize,
   type Layer,
   newId,
@@ -10,6 +11,7 @@ import {
   resizeProject,
   retimeProject,
   type Scene,
+  setScenesDuration,
   type Theme,
 } from "@app/schema";
 import { temporal } from "zundo";
@@ -22,6 +24,8 @@ export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "of
 interface EditorState {
   project: Project;
   selectedSceneId: string;
+  /** Pages ajoutées à la sélection (Ctrl/Maj + clic) en plus de `selectedSceneId`. */
+  extraSceneIds: string[];
   selectedLayerId: string | null;
   selectedAudioId: string | null;
   /** Calque photo en cours de recadrage à la souris (double-clic). */
@@ -43,6 +47,20 @@ interface EditorActions {
   setSaveStatus(status: SaveStatus): void;
 
   selectScene(id: string): void;
+  /** Ctrl/Cmd + clic : ajoute ou retire une page de la sélection. */
+  toggleSceneSelection(id: string): void;
+  /** Maj + clic : sélectionne toutes les pages entre la page active et celle-ci. */
+  selectSceneRange(id: string): void;
+  /**
+   * Donne la même durée (secondes) aux pages visées, en une seule étape d'annulation.
+   * `rememberAsDefault` : true = les nouvelles pages prendront aussi cette durée, false = retour à
+   * la durée conseillée, undefined = on ne touche pas au réglage du projet.
+   */
+  setScenesDuration(
+    seconds: number,
+    scope: DurationScope,
+    rememberAsDefault?: boolean,
+  ): { changed: number; keptLonger: number };
   selectLayer(id: string | null): void;
   selectAudio(id: string | null): void;
   setCropLayer(id: string | null): void;
@@ -96,6 +114,7 @@ const placeholderProject = (): Project => ({
   fps: 30,
   scenes: [createScene()],
   audio: [],
+  defaultSceneSeconds: null,
   theme: null,
   createdAt: "",
   updatedAt: "",
@@ -108,6 +127,7 @@ export const useEditor = create<EditorStore>()(
       return {
         project: initial,
         selectedSceneId: initial.scenes[0]?.id ?? "",
+        extraSceneIds: [],
         selectedLayerId: null,
         selectedAudioId: null,
         cropLayerId: null,
@@ -117,6 +137,7 @@ export const useEditor = create<EditorStore>()(
           set((s) => {
             s.project = project;
             s.selectedSceneId = project.scenes[0]?.id ?? "";
+            s.extraSceneIds = [];
             s.selectedLayerId = null;
             s.selectedAudioId = null;
             s.cropLayerId = null;
@@ -153,8 +174,32 @@ export const useEditor = create<EditorStore>()(
               s.cropLayerId = null;
             }
             s.selectedSceneId = id;
+            s.extraSceneIds = [];
             s.selectedAudioId = null;
           }),
+        toggleSceneSelection: (id) =>
+          set((s) => {
+            if (id === s.selectedSceneId) return;
+            s.extraSceneIds = s.extraSceneIds.includes(id)
+              ? s.extraSceneIds.filter((x) => x !== id)
+              : [...s.extraSceneIds, id];
+          }),
+        selectSceneRange: (id) =>
+          set((s) => {
+            const ids = s.project.scenes.map((sc) => sc.id);
+            const a = ids.indexOf(s.selectedSceneId);
+            const b = ids.indexOf(id);
+            if (a < 0 || b < 0) return;
+            s.extraSceneIds = ids.slice(Math.min(a, b), Math.max(a, b) + 1).filter((x) => x !== s.selectedSceneId);
+          }),
+        setScenesDuration: (seconds, scope, rememberAsDefault) => {
+          let result = { changed: 0, keptLonger: 0 };
+          set((s) => {
+            result = setScenesDuration(s.project, seconds, scope, [s.selectedSceneId, ...s.extraSceneIds]);
+            if (rememberAsDefault !== undefined) s.project.defaultSceneSeconds = rememberAsDefault ? seconds : null;
+          });
+          return result;
+        },
         selectLayer: (id) =>
           set((s) => {
             s.selectedLayerId = id;

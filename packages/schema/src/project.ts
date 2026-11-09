@@ -126,6 +126,11 @@ export const ProjectSchema = z.object({
   fps: z.number().int().min(1).max(60),
   scenes: z.array(SceneSchema).min(1),
   audio: z.array(AudioClipSchema).default([]),
+  /**
+   * Durée choisie pour chaque page, en secondes : celle que prennent les nouvelles pages
+   * (null = durée conseillée selon le contenu). En secondes, donc indépendante de la cadence.
+   */
+  defaultSceneSeconds: z.number().min(0.5).max(120).nullable().default(null),
   /** Thème (palette + polices) ; null = aucun thème choisi. */
   theme: ThemeSchema.nullable().default(null),
   createdAt: z.string(),

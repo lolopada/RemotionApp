@@ -56,12 +56,20 @@ function styleBackground(style: LayoutStyle, theme: Theme, media: MediaItem[]): 
   }
 }
 
-/** Durée conseillée : de quoi voir les photos et lire les textes (3 à 12 s, plus pour une vidéo). */
-export function suggestedDurationSeconds(media: MediaItem[], texts: TextItem[]): number {
+/** Format du projet + durée choisie par l'utilisateur pour chaque page (`defaultSceneSeconds`). */
+export type PageFormat = ProjectFormat & { sceneSeconds?: number | null };
+
+/**
+ * Durée d'une nouvelle page : celle choisie par l'utilisateur si elle existe (sans couper une
+ * vidéo), sinon la durée conseillée : de quoi voir les photos et lire les textes
+ * (3 à 12 s, plus pour une vidéo).
+ */
+export function suggestedDurationSeconds(media: MediaItem[], texts: TextItem[], chosen?: number | null): number {
+  const video = Math.max(0, ...media.map((m) => (m.kind === "video" ? (m.durationSeconds ?? 0) : 0)));
+  if (chosen) return Math.max(chosen, video);
   const words = texts.reduce((n, t) => n + t.text.trim().split(/\s+/).filter(Boolean).length, 0);
   let seconds = 3 + media.length * 0.5 + words / 4;
   seconds = Math.min(12, Math.max(3, seconds));
-  const video = Math.max(0, ...media.map((m) => (m.kind === "video" ? (m.durationSeconds ?? 0) : 0)));
   if (video > 0) seconds = Math.max(seconds, Math.min(15, video));
   return Math.round(seconds * 2) / 2;
 }
@@ -86,7 +94,7 @@ export function buildPage(
   layout: LayoutDef,
   style: LayoutStyle,
   content: ContentItem[],
-  format: ProjectFormat,
+  format: PageFormat,
   theme: Theme | null,
 ): Proposal | null {
   const { media, rawTexts, texts } = split(content);
@@ -100,7 +108,7 @@ export function buildPage(
     .split("\n")[0];
   const scene = createScene({
     name: title ? title.slice(0, 40) : layout.name,
-    durationInFrames: Math.round(suggestedDurationSeconds(media, rawTexts) * format.fps),
+    durationInFrames: Math.round(suggestedDurationSeconds(media, rawTexts, format.sceneSeconds) * format.fps),
     background: b.background ?? styleBackground(style, t, media),
     transitionIn: { kind: "fade", durationInFrames: Math.round(format.fps * 0.6) },
     layers: b.layers,
@@ -123,7 +131,7 @@ export function buildPage(
  * propositions montre donc les meilleures dispositions, chacune avec un style varié ;
  * « Autres idées » fait défiler les tours suivants.
  */
-export function proposeAll(content: ContentItem[], format: ProjectFormat, theme: Theme | null): Proposal[] {
+export function proposeAll(content: ContentItem[], format: PageFormat, theme: Theme | null): Proposal[] {
   const layouts = applicableLayouts(content);
   const S = LAYOUT_STYLES.length;
   // Note d'une disposition = celle de son premier style (les styles changent peu la géométrie).
@@ -153,7 +161,7 @@ export function proposeAll(content: ContentItem[], format: ProjectFormat, theme:
 /** Une « page » de propositions (6 par défaut) ; `page` fait le tour quand on arrive au bout. */
 export function proposeLayouts(
   content: ContentItem[],
-  format: ProjectFormat,
+  format: PageFormat,
   theme: Theme | null,
   page = 0,
   count = 6,

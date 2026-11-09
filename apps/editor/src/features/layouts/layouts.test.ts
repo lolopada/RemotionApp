@@ -181,6 +181,17 @@ describe("propositions", () => {
     const video = { kind: "video" as const, id: "v", src: "/v.webm", aspect: 1.7, name: "v", durationSeconds: 9 };
     expect(suggestedDurationSeconds([video], [])).toBe(9);
   });
+
+  it("durée choisie par l'utilisateur : appliquée aux nouvelles pages, sans couper une vidéo", () => {
+    expect(suggestedDurationSeconds([], [text("t", "mot ".repeat(30))], 2)).toBe(2);
+    const video = { kind: "video" as const, id: "v", src: "/v.webm", aspect: 1.7, name: "v", durationSeconds: 9 };
+    expect(suggestedDurationSeconds([video], [], 2)).toBe(9);
+    const content = [photo("p0"), text("t", "Titre")];
+    const fps = FORMATS.landscape.fps;
+    for (const p of proposeAll(content, { ...FORMATS.landscape, sceneSeconds: 2 }, null)) {
+      expect(p.scene.durationInFrames).toBe(2 * fps);
+    }
+  });
 });
 
 describe("changer de mise en page", () => {

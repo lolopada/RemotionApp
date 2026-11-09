@@ -16,6 +16,7 @@ import {
   projectHasSound,
   resizeProject,
   retimeProject,
+  setScenesDuration,
   type Theme,
 } from "./index";
 
@@ -159,5 +160,60 @@ describe("calques vidéo", () => {
   it("a des valeurs par défaut sûres", () => {
     const v = createVideoLayer({ src: "/files/a.mp4" });
     expect(v).toMatchObject({ volume: 1, muted: false, loop: true, playbackRate: 1, trimStartFrames: 0, fit: "cover" });
+  });
+});
+
+describe("durée par page en masse", () => {
+  const make = (n: number) => createProject({ scenes: Array.from({ length: n }, () => createScene()) });
+
+  it("toutes les pages", () => {
+    const project = make(4);
+    const r = setScenesDuration(project, 2.5, "all");
+    expect(project.scenes.every((s) => s.durationInFrames === Math.round(2.5 * project.fps))).toBe(true);
+    expect(r.changed).toBe(4);
+  });
+
+  it("toutes sauf la première et la dernière", () => {
+    const project = make(4);
+    const before = project.scenes.map((s) => s.durationInFrames);
+    setScenesDuration(project, 2, "inner");
+    const after = project.scenes.map((s) => s.durationInFrames);
+    expect(after[0]).toBe(before[0]);
+    expect(after[3]).toBe(before[3]);
+    expect(after[1]).toBe(2 * project.fps);
+    expect(after[2]).toBe(2 * project.fps);
+  });
+
+  it("deux pages ou moins : « sauf première et dernière » ne touche rien", () => {
+    const project = make(2);
+    expect(setScenesDuration(project, 1, "inner")).toEqual({ changed: 0, keptLonger: 0 });
+  });
+
+  it("seulement la sélection", () => {
+    const project = make(3);
+    const second = project.scenes[1] as (typeof project.scenes)[number];
+    setScenesDuration(project, 1, "selected", [second.id]);
+    expect(project.scenes.map((s) => s.durationInFrames)).toEqual([
+      project.scenes[0]?.durationInFrames,
+      project.fps,
+      project.scenes[2]?.durationInFrames,
+    ]);
+    expect(project.scenes[0]?.durationInFrames).not.toBe(project.fps);
+  });
+
+  it("ne raccourcit pas une page sous sa vidéo", () => {
+    const video = createVideoLayer({ src: "/files/a.mp4", sourceDurationSeconds: 8 });
+    const project = createProject({ scenes: [createScene({ layers: [video] }), createScene()] });
+    const r = setScenesDuration(project, 3, "all");
+    expect(project.scenes[0]?.durationInFrames).toBe(8 * project.fps);
+    expect(project.scenes[1]?.durationInFrames).toBe(3 * project.fps);
+    expect(r.keptLonger).toBe(1);
+  });
+
+  it("la durée par défaut du projet est facultative et sans effet sur les anciens projets", () => {
+    const project = createProject();
+    expect(project.defaultSceneSeconds).toBeNull();
+    const { defaultSceneSeconds: _omit, ...old } = project;
+    expect(ProjectSchema.parse(old).defaultSceneSeconds).toBeNull();
   });
 });

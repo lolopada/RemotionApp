@@ -173,6 +173,17 @@ disposition en gardant son nom, sa durée et sa transition. Rien n'est recadré 
 les photos sont centrées, à ajuster ensuite si besoin. Ajouter une disposition = une entrée
 dans `apps/editor/src/features/layouts/library.ts`.
 
+### Durée par page
+
+Au-dessus des vignettes du storyboard, **« Durée par page »** donne la même durée (en secondes)
+à plusieurs pages d'un coup : toutes les pages, toutes **sauf la première et la dernière**
+(intro et fin gardent leur durée), ou la sélection (**Ctrl/Cmd + clic** ajoute une vignette,
+**Maj + clic** prend une plage). Une page avec une vidéo n'est jamais raccourcie sous la durée de
+sa vidéo (le message le signale). Un seul Ctrl+Z annule l'opération. La case « Aussi pour les
+nouvelles pages » (cochée par défaut) mémorise la durée dans le projet (`defaultSceneSeconds`) :
+les pages créées ensuite (« Nouvelle page », « Page vide ») la prennent au lieu de la durée
+conseillée. Chaque page reste réglable seule dans le panneau « Scène ».
+
 ### Projet : thème, modèles, format
 
 - **Thème** (onglet Thème) : une palette à 5 rôles (fond, fond 2, accent, titres, textes)
