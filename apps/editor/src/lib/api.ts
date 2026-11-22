@@ -1,4 +1,13 @@
-import type { FileKind, Project, ProjectSummary, ProjectVersion, SceneTemplate, StoredFile, User } from "@app/schema";
+import type {
+  FileKind,
+  MusicSearchResult,
+  Project,
+  ProjectSummary,
+  ProjectVersion,
+  SceneTemplate,
+  StoredFile,
+  User,
+} from "@app/schema";
 
 /**
  * Client de l'API (même origine : proxy Vite en dev, même serveur en prod).
@@ -52,6 +61,19 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   changePassword: (current: string, next: string) =>
     request<void>("/api/auth/password", { ...json("POST", { current, next }), skipAuthRedirect: true }),
+
+  // --- Musique (propositions Jamendo)
+  musicStatus: () => request<{ enabled: boolean; moods: { id: string; label: string }[] }>("/api/music/status"),
+  searchMusic: (q: { mood?: string; q?: string; instrumental?: boolean; forSeconds?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (q.mood) params.set("mood", q.mood);
+    if (q.q) params.set("q", q.q);
+    if (q.instrumental) params.set("instrumental", "1");
+    if (q.forSeconds) params.set("forSeconds", String(Math.round(q.forSeconds)));
+    if (q.offset) params.set("offset", String(q.offset));
+    return request<MusicSearchResult>(`/api/music/search?${params}`);
+  },
+  importMusic: (trackId: string) => request<StoredFile>("/api/music/import", json("POST", { trackId })),
 
   // --- Projets
   listProjects: () => request<ProjectSummary[]>("/api/projects"),

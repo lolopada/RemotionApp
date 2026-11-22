@@ -1,16 +1,17 @@
 import type { StoredFile as AssetInfo } from "@app/schema";
 import { createBackground, createImageLayer } from "@app/schema";
 import { ImagePlus, Trash2 } from "lucide-react";
+import { TileImg } from "../../components/TileImg";
 import { assignImage } from "../../lib/images";
 import { getImageSize } from "../../lib/media";
-import { useEditor, useProject, useSelectedLayer } from "../../store/editorStore";
+import { useEditor, useProjectFormat, useSelectedLayer } from "../../store/editorStore";
 import { setDraggedAsset } from "../preview/dnd";
 import { TabHeader } from "./LibraryPanel";
 import { UploadButton } from "./UploadButton";
 import { useAssets } from "./useAssets";
 
 export function MediaTab() {
-  const project = useProject();
+  const project = useProjectFormat();
   const selected = useSelectedLayer();
   const { addLayer, updateScene } = useEditor.getState();
   const selectedSceneId = useEditor((s) => s.selectedSceneId);
@@ -80,7 +81,7 @@ export function MediaTab() {
               onClick={() => void use(a)}
               className="block aspect-square w-full overflow-hidden rounded-md bg-canvas ring-1 ring-line transition hover:ring-2 hover:ring-accent"
             >
-              <img src={a.url} alt={a.name} loading="lazy" className="size-full object-cover" />
+              <TileImg src={a.url} alt={a.name} />
             </button>
             <button
               type="button"

@@ -2,6 +2,7 @@ import { imageBox, maxOffset, photoArea } from "@app/composition";
 import type { ImageLayer } from "@app/schema";
 import { Check, RotateCcw, ZoomIn } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useRafBatch } from "../../lib/useRafBatch";
 import { useEditor } from "../../store/editorStore";
 
 const MIN_ZOOM = 1;
@@ -18,6 +19,7 @@ export function CropOverlay({ layer, scale }: { layer: ImageLayer; scale: number
   const { updateLayer, setCropLayer } = useEditor.getState();
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const { x, y, width, height, rotation } = layer.transform;
+  const { schedule, flush } = useRafBatch();
   const area = photoArea(layer);
   const box = imageBox(layer, area.width, area.height);
   const { zoom, offsetX, offsetY } = layer.crop;
@@ -96,9 +98,10 @@ export function CropOverlay({ layer, scale }: { layer: ImageLayer; scale: number
             const d = drag.current;
             if (!d) return;
             const { dx, dy } = toLocal(e.clientX - d.x, e.clientY - d.y);
-            setCrop(zoom, d.ox + dx / area.width, d.oy + dy / area.height);
+            schedule(() => setCrop(zoom, d.ox + dx / area.width, d.oy + dy / area.height));
           }}
           onPointerUp={() => {
+            flush();
             drag.current = null;
           }}
           onDoubleClick={() => setCropLayer(null)}

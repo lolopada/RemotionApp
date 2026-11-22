@@ -1,9 +1,9 @@
 import { ScenePreview, TRANSITION_LABELS } from "@app/composition";
-import { framesToSeconds, getProjectDurationInFrames, type Project, type Scene } from "@app/schema";
+import { framesToSeconds, getProjectDurationInFrames, type Scene } from "@app/schema";
 import { Thumbnail } from "@remotion/player";
 import clsx from "clsx";
 import { ArrowRightLeft, Copy, Plus, Trash2 } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import { IconButton } from "../../components/ui";
 import { useEditor, useProject } from "../../store/editorStore";
 import { useLayoutWizard } from "../layouts/wizardStore";
@@ -101,7 +101,13 @@ export function Storyboard() {
                       : "ring-transparent hover:ring-line",
                 )}
               >
-                <SceneThumb project={project} scene={scene} width={thumbWidth} />
+                <SceneThumb
+                  compWidth={project.width}
+                  compHeight={project.height}
+                  fps={project.fps}
+                  scene={scene}
+                  width={thumbWidth}
+                />
               </button>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between rounded-b-md bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-3 pb-0.5 text-[10px] text-white">
                 <span>{i + 1}</span>
@@ -184,24 +190,32 @@ function TransitionChip({
 }
 
 /** Vignette d'une scène, rendue par la même composition que l'aperçu. */
+// Props simples (pas le projet entier) : seule la vignette de la scène modifiée est redessinée.
 const SceneThumb = memo(function SceneThumb({
-  project,
+  compWidth,
+  compHeight,
+  fps,
   scene,
   width,
 }: {
-  project: Project;
+  compWidth: number;
+  compHeight: number;
+  fps: number;
   scene: Scene;
   width: number;
 }) {
+  // Basse priorité : pendant un déplacement à la souris, l'aperçu passe avant la vignette.
+  const deferred = useDeferredValue(scene);
+  const inputProps = useMemo(() => ({ scene: deferred, showPlaceholders: true }), [deferred]);
   return (
     <Thumbnail
       component={ScenePreview}
-      inputProps={{ scene, showPlaceholders: true }}
-      compositionWidth={project.width}
-      compositionHeight={project.height}
-      durationInFrames={scene.durationInFrames}
-      fps={project.fps}
-      frameToDisplay={Math.min(scene.durationInFrames - 1, Math.round(project.fps * 1.5))}
+      inputProps={inputProps}
+      compositionWidth={compWidth}
+      compositionHeight={compHeight}
+      durationInFrames={deferred.durationInFrames}
+      fps={fps}
+      frameToDisplay={Math.min(deferred.durationInFrames - 1, Math.round(fps * 1.5))}
       style={{ width, height: THUMB_HEIGHT }}
     />
   );

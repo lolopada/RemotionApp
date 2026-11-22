@@ -41,5 +41,5 @@ export function useAssets(kind: "image" | "audio" | "video") {
     await refresh();
   };
 
-  return { assets, error, uploading, upload, remove };
+  return { assets, error, uploading, upload, remove, refresh };
 }

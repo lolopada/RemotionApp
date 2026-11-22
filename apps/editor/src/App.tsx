@@ -1,9 +1,11 @@
+import { ImageSourcesContext } from "@app/composition";
 import { CloudOff, LoaderCircle } from "lucide-react";
 import { useEffect } from "react";
 import { AuthScreen } from "./features/auth/AuthScreen";
 import { EditorPage } from "./features/editor/EditorPage";
 import { ProjectsPage } from "./features/home/ProjectsPage";
 import { VideosPage } from "./features/home/VideosPage";
+import { previewImageSources } from "./lib/previewImages";
 import { useRoute } from "./lib/router";
 import { useAuth } from "./store/authStore";
 
@@ -37,13 +39,21 @@ export function App() {
   }
   if (auth.status === "anonymous") return <AuthScreen />;
 
-  // La clé force un remontage propre quand on change de projet ou d'utilisateur.
+  // Aperçus et vignettes affichent des copies réduites des photos (l'export, rendu à part,
+  // garde les originales).
+  return (
+    <ImageSourcesContext.Provider value={previewImageSources}>{page(route, auth.user.id)}</ImageSourcesContext.Provider>
+  );
+}
+
+// La clé force un remontage propre quand on change de projet ou d'utilisateur.
+function page(route: ReturnType<typeof useRoute>, userId: string | number) {
   switch (route.name) {
     case "editor":
-      return <EditorPage key={`${auth.user.id}:${route.projectId}`} projectId={route.projectId} />;
+      return <EditorPage key={`${userId}:${route.projectId}`} projectId={route.projectId} />;
     case "videos":
-      return <VideosPage key={auth.user.id} />;
+      return <VideosPage key={userId} />;
     default:
-      return <ProjectsPage key={auth.user.id} />;
+      return <ProjectsPage key={userId} />;
   }
 }

@@ -3,7 +3,7 @@ import { createTextLayer, type TextLayer } from "@app/schema";
 import { Thumbnail } from "@remotion/player";
 import { memo, useMemo } from "react";
 import { AbsoluteFill } from "remotion";
-import { useEditor, useProject, useSelectedLayer } from "../../store/editorStore";
+import { useEditor, useProjectFormat, useSelectedLayer } from "../../store/editorStore";
 import { applyPreset, resolvePresetStyle, TEXT_PRESETS, type TextPreset } from "../../templates/textPresets";
 
 const PREVIEW_W = 600;
@@ -55,7 +55,7 @@ const PresetTile = memo(function PresetTile({ preset, onClick }: { preset: TextP
  * comme nouveau texte au centre si aucun texte n'est sélectionné.
  */
 export function TextStyles() {
-  const project = useProject();
+  const project = useProjectFormat();
   const selected = useSelectedLayer();
   const { addLayer, updateLayer } = useEditor.getState();
   const scale = Math.min(project.width, project.height) / 1080;

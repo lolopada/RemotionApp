@@ -1,7 +1,8 @@
 import type { DurationScope } from "@app/schema";
 import { Timer } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useShallow } from "zustand/react/shallow";
+import { useEditor } from "../../store/editorStore";
 
 const inputClass =
   "h-6 w-14 rounded border border-line bg-canvas px-1.5 text-right text-[11px] text-ink tabular-nums outline-none focus:border-accent";
@@ -12,7 +13,14 @@ const inputClass =
  * des nouvelles pages. Chaque page reste réglable à la main ensuite.
  */
 export function DurationBar() {
-  const project = useProject();
+  // Sélecteurs étroits : la barre n'est pas redessinée à chaque modification du projet.
+  const project = useEditor(
+    useShallow((s) => ({
+      id: s.project.id,
+      defaultSceneSeconds: s.project.defaultSceneSeconds,
+      sceneCount: s.project.scenes.length,
+    })),
+  );
   const selectedCount = useEditor((s) => 1 + s.extraSceneIds.filter((id) => id !== s.selectedSceneId).length);
   const [text, setText] = useState(String(project.defaultSceneSeconds ?? 3));
   const [scope, setScope] = useState<DurationScope>("all");
@@ -29,7 +37,7 @@ export function DurationBar() {
 
   const seconds = Number(text.replace(",", "."));
   const valid = Number.isFinite(seconds) && seconds >= 0.5 && seconds <= 120;
-  const noTarget = scope === "inner" && project.scenes.length <= 2;
+  const noTarget = scope === "inner" && project.sceneCount <= 2;
 
   const apply = () => {
     if (!valid) return;

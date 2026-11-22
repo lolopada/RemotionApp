@@ -27,6 +27,12 @@ export const config = {
   versionIntervalMs: Number(env.VERSION_INTERVAL_MINUTES ?? 10) * 60_000,
   /** Versions automatiques gardées par projet (les versions nommées sont toujours gardées). */
   maxAutoVersions: Number(env.MAX_AUTO_VERSIONS ?? 50),
+  /**
+   * Propositions de musique : clé « client_id » Jamendo (gratuite pour un usage non commercial,
+   * https://devportal.jamendo.com). Vide = propositions désactivées.
+   */
+  jamendoClientId: env.JAMENDO_CLIENT_ID ?? "",
+  jamendoApiUrl: env.JAMENDO_API_URL ?? "https://api.jamendo.com/v3.0",
 };
 
 export type AppConfig = typeof config;

@@ -1,7 +1,7 @@
 import type { ImageLayer } from "@app/schema";
 import type { CSSProperties } from "react";
 import { Img } from "remotion";
-import { useRenderMode } from "../context";
+import { useImageSrc, useRenderMode } from "../context";
 import { useKenBurns } from "../effects/animations";
 import { getMaskStyle } from "../effects/masks";
 import { imageBox, photoArea, photoFilterCss } from "../effects/photo";
@@ -18,6 +18,7 @@ import type { LayerViewProps } from "./types";
  */
 export function ImageLayerView({ layer, sceneDurationInFrames }: LayerViewProps<ImageLayer>) {
   const { showPlaceholders } = useRenderMode();
+  const src = useImageSrc(layer.src ?? "");
   const kenBurns = useKenBurns(layer.animation.kenBurns, layer.animation.kenBurnsMode, sceneDurationInFrames);
   const polaroid = layer.frame === "polaroid";
   const area = photoArea(layer);
@@ -55,7 +56,7 @@ export function ImageLayerView({ layer, sceneDurationInFrames }: LayerViewProps<
     >
       {layer.src ? (
         <Img
-          src={layer.src}
+          src={src}
           style={{
             position: "absolute",
             left: box.left,

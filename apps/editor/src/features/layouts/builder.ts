@@ -4,8 +4,11 @@ import {
   createShapeLayer,
   createTextLayer,
   createVideoLayer,
+  type DecorShape,
   type EnterAnimation,
+  type ImageLayer,
   type Layer,
+  type MaskShape,
   type ProjectFormat,
   type Theme,
 } from "@app/schema";
@@ -35,11 +38,16 @@ import {
 export interface LayoutStyle {
   id: string;
   name: string;
-  background: "gradient" | "solid" | "pattern" | "radial" | "photo" | "motion";
+  background: "gradient" | "solid" | "pattern" | "radial" | "photo" | "motion" | "stripes" | "checks" | "grid" | "spot";
   frame: "plain" | "rounded" | "border" | "polaroid" | "shadow";
-  motion: "soft" | "slide" | "pop" | "wipe";
+  motion: "soft" | "slide" | "pop" | "wipe" | "blur" | "bounce" | "flip" | "rise";
+  /** Filtre de couleur posé sur les photos (sauf si la photo a déjà le sien). */
+  filter?: ImageLayer["filter"]["preset"];
+  /** Grain de pellicule sur le fond (0–1). */
+  grain?: number;
 }
 
+/** Tous les styles reprennent les couleurs du thème : seuls le traitement et le mouvement changent. */
 export const LAYOUT_STYLES: LayoutStyle[] = [
   { id: "doux", name: "Doux", background: "gradient", frame: "rounded", motion: "soft" },
   { id: "net", name: "Net", background: "solid", frame: "plain", motion: "slide" },
@@ -47,6 +55,20 @@ export const LAYOUT_STYLES: LayoutStyle[] = [
   { id: "album", name: "Album", background: "radial", frame: "polaroid", motion: "slide" },
   { id: "flou", name: "Fond flou", background: "photo", frame: "shadow", motion: "soft" },
   { id: "vivant", name: "Vivant", background: "motion", frame: "rounded", motion: "wipe" },
+  {
+    id: "pellicule",
+    name: "Pellicule",
+    background: "solid",
+    frame: "plain",
+    motion: "blur",
+    filter: "vintage",
+    grain: 0.35,
+  },
+  { id: "noir-blanc", name: "Noir et blanc", background: "radial", frame: "border", motion: "soft", filter: "bw" },
+  { id: "rayures", name: "Rayures", background: "stripes", frame: "shadow", motion: "bounce" },
+  { id: "carnet", name: "Carnet", background: "grid", frame: "polaroid", motion: "flip", filter: "warm" },
+  { id: "damier", name: "Damier", background: "checks", frame: "rounded", motion: "pop", filter: "fade" },
+  { id: "lumineux", name: "Lumineux", background: "spot", frame: "shadow", motion: "rise", filter: "vivid" },
 ];
 
 /** Palette utilisée quand le projet n'a pas encore de thème. */
@@ -59,7 +81,8 @@ export const DEFAULT_THEME: Theme = {
 
 export type ResolvedText = TextItem & { role: TextRole };
 
-type Treatment = LayoutStyle["frame"] | "none" | "circle" | "arch";
+/** Habillage d'une photo : celui du style, ou une forme imposée par la disposition (masque). */
+export type Treatment = LayoutStyle["frame"] | "none" | Exclude<MaskShape, "none" | "rect" | "rounded">;
 
 export interface MediaOptions {
   /** fill = remplit exactement la case (la photo est rognée) ; fit = cadre ajusté à la photo. */
@@ -71,6 +94,8 @@ export interface MediaOptions {
   bleed?: boolean;
   /** Taille dans la case en mode fit (1 = la case entière). */
   scale?: number;
+  /** Couleur du liseré (habillage « border »), blanc par défaut. */
+  borderColor?: string;
 }
 
 export interface TextOptions {
@@ -80,6 +105,8 @@ export interface TextOptions {
   onPhoto?: boolean;
   /** Taille du titre avant réduction (px pour un petit côté de 1080). */
   maxSize?: number;
+  /** Seulement le titre, ou seulement les autres textes (sous-titre, texte). */
+  pick?: "title" | "rest";
 }
 
 /** Ce qu'une disposition a besoin de connaître pour se construire. */
@@ -162,17 +189,15 @@ export class PageBuilder {
     box = round(box);
 
     const small = Math.min(box.width, box.height);
-    const mask =
-      treatment === "circle"
-        ? { shape: "circle" as const }
-        : treatment === "arch"
-          ? { shape: "arch" as const }
-          : treatment === "rounded" || treatment === "shadow"
-            ? { shape: "rounded" as const, radius: Math.round(small * 0.06) }
-            : { shape: "none" as const };
+    const framed = ["plain", "rounded", "border", "polaroid", "shadow", "none"].includes(treatment);
+    const mask = !framed
+      ? { shape: treatment as MaskShape }
+      : treatment === "rounded" || treatment === "shadow"
+        ? { shape: "rounded" as const, radius: Math.round(small * 0.06) }
+        : { shape: "none" as const };
     const transform = { ...box, rotation: opts.rotation ?? 0 };
     const dropShadow = {
-      enabled: treatment === "shadow" || treatment === "polaroid" || treatment === "border",
+      enabled: treatment === "shadow" || treatment === "polaroid" || treatment === "border" || !framed,
       blur: Math.round(30 * this.u),
       y: Math.round(14 * this.u),
       opacity: 0.4,
@@ -187,9 +212,12 @@ export class PageBuilder {
             transform,
             mask,
             frame: treatment === "polaroid" ? "polaroid" : "none",
-            border: treatment === "border" ? { width: Math.max(4, Math.round(small * 0.025)), color: "#ffffff" } : {},
+            border:
+              treatment === "border"
+                ? { width: Math.max(4, Math.round(small * 0.025)), color: opts.borderColor ?? "#ffffff" }
+                : {},
             dropShadow,
-            filter: item.filter ?? {},
+            filter: item.filter ?? (this.style.filter ? { preset: this.style.filter } : {}),
           })
         : createVideoLayer({
             name: item.name || "Vidéo",
@@ -198,6 +226,7 @@ export class PageBuilder {
             transform,
             mask,
             dropShadow,
+            filter: this.style.filter ? { preset: this.style.filter } : {},
             ...(item.keep ?? {}),
           });
     this.push(layer, bleed ? "bleed" : "media");
@@ -206,15 +235,16 @@ export class PageBuilder {
 
   /** Empile les textes (titre, sous-titre, texte) dans la zone. Renvoie le cadre occupé. */
   addTexts(zone: Rect, opts: TextOptions = {}): Rect | null {
-    if (!this.hasText) return null;
+    const texts = this.pickTexts(opts.pick);
+    if (texts.length === 0) return null;
     const { align = "center", valign = "center", onPhoto = false } = opts;
     const u = this.u;
     const maxSize = (opts.maxSize ?? 110) * u;
-    const spec = this.texts.map((t) => ({
+    const spec = texts.map((t) => ({
       text: t.text,
       weight: t.role === "title" ? 1 : t.role === "subtitle" ? 0.42 : 0.4,
       lineHeight: t.role === "title" ? 1.1 : 1.3,
-      charWidth: t.role === "title" ? 0.58 : t.role === "subtitle" ? 0.62 : 0.52,
+      charWidth: t.role === "title" ? 0.66 : t.role === "subtitle" ? 0.68 : 0.56,
       // En dessous, un texte devient illisible sur un téléphone.
       min: Math.round((t.role === "title" ? 40 : t.role === "subtitle" ? 26 : 30) * u),
     }));
@@ -227,7 +257,7 @@ export class PageBuilder {
     if (valign === "bottom") y += zone.height - fit.total;
     const top = y;
     const c = this.theme.colors;
-    this.texts.forEach((t, i) => {
+    texts.forEach((t, i) => {
       const fs = fit.fontSizes[i] as number;
       const h = fit.heights[i] as number;
       const heading = t.role === "title";
@@ -254,33 +284,60 @@ export class PageBuilder {
     return round(rect(zone.x, top, zone.width, fit.total));
   }
 
+  /** Textes concernés : tous, le titre seul, ou les autres. */
+  pickTexts(pick?: "title" | "rest"): ResolvedText[] {
+    if (!pick) return this.texts;
+    return this.texts.filter((t) => (pick === "title") === (t.role === "title"));
+  }
+
   /** Aplat de couleur (panneau derrière un texte, bandeau, pastille décorative). */
   addPanel(
     box: Rect,
     color: string,
-    opts: { opacity?: number; radius?: number; shape?: "rect" | "circle"; name?: string } = {},
+    opts: {
+      opacity?: number;
+      radius?: number;
+      shape?: DecorShape;
+      name?: string;
+      rotation?: number;
+      /** Contour seul (cadre fin) : épaisseur en px, sans remplissage. */
+      outline?: number;
+      dotted?: boolean;
+    } = {},
   ) {
     const layer = createShapeLayer({
       name: opts.name ?? "Fond du texte",
       shape: opts.shape ?? "rect",
       fill: color,
+      fillMode: opts.outline ? "none" : "solid",
+      stroke: opts.outline
+        ? {
+            enabled: true,
+            color,
+            width: Math.max(1, Math.round(opts.outline)),
+            style: opts.dotted ? "dotted" : "solid",
+          }
+        : {},
       radius: opts.radius ?? Math.round(18 * this.u),
-      transform: { ...round(box), opacity: opts.opacity ?? 1 },
+      transform: { ...round(box), opacity: opts.opacity ?? 1, rotation: opts.rotation ?? 0 },
     });
     this.push(layer, "decor");
     return layer;
   }
 
   /** Dégradé sombre en bas d'une photo pleine page, pour lire le texte posé dessus. */
-  addScrim(box: Rect, from: "bottom" | "top" = "bottom") {
+  addScrim(box: Rect, from: "bottom" | "top" | "left" | "all" = "bottom") {
+    const dark = "rgba(0,0,0,0.7)";
+    const clear = "rgba(0,0,0,0)";
     const layer = createShapeLayer({
       name: "Ombre de lecture",
       shape: "rect",
       radius: 0,
-      fillMode: "gradient",
+      fillMode: from === "all" ? "solid" : "gradient",
+      fill: "rgba(0,0,0,0.4)",
       gradient: {
-        colors: from === "bottom" ? ["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"] : ["rgba(0,0,0,0.7)", "rgba(0,0,0,0)"],
-        angle: 180,
+        colors: from === "bottom" ? [clear, dark] : [dark, clear],
+        angle: from === "left" ? 90 : 180,
       },
       transform: round(box),
     });
@@ -311,8 +368,26 @@ export class PageBuilder {
   animate() {
     const k = this.f.fps / 30;
     const f = (n: number) => Math.max(1, Math.round(n * k));
-    const media = { soft: "fade", slide: "slide-up", pop: "zoom", wipe: "wipe-right" } as const;
-    const text = { soft: "slide-up", slide: "slide-left", pop: "pop", wipe: "wipe-right" } as const;
+    const media = {
+      soft: "fade",
+      slide: "slide-up",
+      pop: "zoom",
+      wipe: "wipe-right",
+      blur: "blur",
+      bounce: "bounce",
+      flip: "flip",
+      rise: "slide-up",
+    } as const;
+    const text = {
+      soft: "slide-up",
+      slide: "slide-left",
+      pop: "pop",
+      wipe: "wipe-right",
+      blur: "blur",
+      bounce: "pop",
+      flip: "slide-up",
+      rise: "fade",
+    } as const;
     let mediaIndex = 0;
     let textIndex = 0;
     const mediaCount = this.order.filter((o) => o.role === "media").length;
@@ -334,8 +409,10 @@ export class PageBuilder {
         if (this.style.motion === "slide" && mediaCount > 1) enter = mediaIndex % 2 ? "slide-right" : "slide-left";
         a.enter = enter;
         a.enterDurationInFrames = f(this.style.motion === "pop" ? 16 : 20);
-        a.enterDelayInFrames = f(mediaIndex * 6);
-        if (layer.type === "image" && this.style.motion === "soft") a.kenBurns = 0.05;
+        // Beaucoup de photos : elles arrivent plus vite les unes après les autres.
+        a.enterDelayInFrames = f(mediaIndex * (mediaCount > 6 ? 3 : 6));
+        if (this.style.motion === "rise") a.easing = "elastic";
+        if (layer.type === "image" && (this.style.motion === "soft" || this.style.motion === "blur")) a.kenBurns = 0.05;
         mediaIndex += 1;
       } else {
         a.enter = text[this.style.motion];

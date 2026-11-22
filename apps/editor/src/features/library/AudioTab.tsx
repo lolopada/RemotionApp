@@ -1,34 +1,26 @@
-import type { StoredFile as AssetInfo } from "@app/schema";
-import { createAudioClip, getProjectDurationInFrames, secondsToFrames } from "@app/schema";
+import clsx from "clsx";
 import { Music, Plus } from "lucide-react";
-import { getAudioDurationInSeconds } from "../../lib/media";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useEffect, useState } from "react";
+import { api } from "../../lib/api";
 import { TabHeader } from "./LibraryPanel";
+import { addAssetToTrack } from "./music/addToTrack";
+import { MusicSuggestions } from "./music/MusicSuggestions";
 import { UploadButton } from "./UploadButton";
 import { useAssets } from "./useAssets";
 
-export function AudioTab() {
-  const project = useProject();
-  const addAudio = useEditor((s) => s.addAudio);
-  const { assets, error, uploading, upload } = useAssets("audio");
+type Status = { enabled: boolean; moods: { id: string; label: string }[] } | null;
 
-  /** Ajoute le morceau à la suite des précédents, coupé à la fin de la vidéo. */
-  const add = async (asset: AssetInfo) => {
-    const seconds = await getAudioDurationInSeconds(asset.url).catch(() => 30);
-    const total = getProjectDurationInFrames(project);
-    const start = Math.min(
-      total - 1,
-      project.audio.reduce((end, c) => Math.max(end, c.startFrame + c.durationInFrames), 0),
-    );
-    addAudio(
-      createAudioClip({
-        name: asset.name,
-        src: asset.url,
-        startFrame: start,
-        durationInFrames: Math.max(1, Math.min(secondsToFrames(seconds, project.fps), total - start)),
-      }),
-    );
-  };
+export function AudioTab() {
+  const { assets, error, uploading, upload, refresh } = useAssets("audio");
+  const [status, setStatus] = useState<Status>(null);
+  const [view, setView] = useState<"suggestions" | "mine">("suggestions");
+
+  useEffect(() => {
+    api
+      .musicStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ enabled: false, moods: [] }));
+  }, []);
 
   return (
     <div>
@@ -36,31 +28,74 @@ export function AudioTab() {
         title="Musique"
         hint="Les morceaux s'enchaînent sur la piste sous le storyboard, avec fondus automatiques."
       />
-      <div className="px-3">
-        <UploadButton
-          accept="audio/*"
-          label="Importer une musique"
-          uploading={uploading}
-          onFiles={(f) => void upload(f)}
-        />
-        {error ? <p className="mt-2 text-[11px] text-red-300">{error}</p> : null}
-      </div>
-      <ul className="space-y-1 p-3">
-        {assets.map((a) => (
-          <li key={a.id} className="flex items-center gap-2 rounded-md bg-canvas px-2 py-1.5 ring-1 ring-line">
-            <Music size={14} className="shrink-0 text-emerald-400" />
-            <span className="min-w-0 flex-1 truncate text-xs">{a.name}</span>
-            <button
-              type="button"
-              title="Ajouter à la piste"
-              onClick={() => void add(a)}
-              className="rounded p-1 text-ink-muted hover:bg-panel-hover hover:text-ink"
-            >
-              <Plus size={14} />
-            </button>
-          </li>
+      <div className="mx-3 mb-2 grid grid-cols-2 rounded-md bg-canvas p-0.5 text-xs ring-1 ring-line">
+        {(
+          [
+            ["suggestions", "Propositions"],
+            ["mine", "Mes musiques"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={view === id}
+            onClick={() => setView(id)}
+            className={clsx(
+              "rounded px-2 py-1 transition",
+              view === id ? "bg-panel-hover text-ink" : "text-ink-muted hover:text-ink",
+            )}
+          >
+            {label}
+          </button>
         ))}
-      </ul>
+      </div>
+
+      {view === "suggestions" ? (
+        status === null ? null : status.enabled ? (
+          <MusicSuggestions moods={status.moods} onImported={() => void refresh()} />
+        ) : (
+          <p className="mx-3 rounded-md border border-line border-dashed p-3 text-[11px] text-ink-faint leading-snug">
+            Les propositions de musique ne sont pas encore activées sur ce serveur : il faut une clé Jamendo (gratuite),
+            à mettre dans <code>JAMENDO_CLIENT_ID</code> (voir le guide de déploiement). En attendant, importe tes
+            propres musiques dans « Mes musiques ».
+          </p>
+        )
+      ) : (
+        <>
+          <div className="px-3">
+            <UploadButton
+              accept="audio/*"
+              label="Importer une musique"
+              uploading={uploading}
+              onFiles={(f) => void upload(f)}
+            />
+            {error ? <p className="mt-2 text-[11px] text-red-300">{error}</p> : null}
+          </div>
+          <ul className="space-y-1 p-3">
+            {assets.map((a) => (
+              <li key={a.id} className="flex items-center gap-2 rounded-md bg-canvas px-2 py-1.5 ring-1 ring-line">
+                <Music size={14} className="shrink-0 text-emerald-400" />
+                <span className="min-w-0 flex-1 truncate text-xs" title={a.credit ?? a.name}>
+                  {a.name}
+                </span>
+                {a.credit ? (
+                  <span className="shrink-0 rounded bg-panel px-1 text-[9px] text-ink-faint" title={a.credit}>
+                    CC
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  title="Ajouter à la piste"
+                  onClick={() => void addAssetToTrack(a)}
+                  className="rounded p-1 text-ink-muted hover:bg-panel-hover hover:text-ink"
+                >
+                  <Plus size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

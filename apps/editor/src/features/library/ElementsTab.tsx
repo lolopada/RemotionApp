@@ -11,7 +11,7 @@ import {
 import { Type } from "lucide-react";
 import type { ReactNode } from "react";
 import { ShapeIcon } from "../../components/ShapeIcon";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useEditor, useProjectFormat, useProjectTheme } from "../../store/editorStore";
 import { SHAPE_LABELS } from "../inspector/sections/ImageSection";
 import { DECOR_LABELS } from "../inspector/sections/ShapeSection";
 import { TabHeader } from "./LibraryPanel";
@@ -32,7 +32,7 @@ function Tile({ label, icon, onClick }: { label: string; icon: ReactNode; onClic
 }
 
 export function ElementsTab() {
-  const project = useProject();
+  const project = { ...useProjectFormat(), theme: useProjectTheme() };
   const addLayer = useEditor((s) => s.addLayer);
   const unit = Math.min(project.width, project.height);
 

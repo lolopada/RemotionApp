@@ -31,6 +31,24 @@ proxy_send_timeout 900s;
 send_timeout 900s;
 ```
 
+### Propositions de musique (Jamendo)
+
+L'onglet **Musique → Propositions** cherche des morceaux sur [Jamendo](https://www.jamendo.com)
+(licences Creative Commons), par ambiance ou par mot-clé, avec écoute et ajout en un clic. Il faut
+une clé gratuite (usage non commercial) :
+
+1. Crée un compte sur <https://devportal.jamendo.com>, puis une application (nom : Montage, site :
+   ton domaine). Copie son **Client ID**.
+2. Dans la CT : `cd /root/montage-src && ./deploy/install.sh --jamendo TON_CLIENT_ID`
+   (la clé est écrite dans `/etc/montage.env`, ligne `JAMENDO_CLIENT_ID=` ; elle ne quitte jamais
+   le serveur).
+3. `montage-doctor` vérifie que Jamendo répond et que la clé est acceptée.
+
+Le serveur doit pouvoir sortir en HTTPS vers `api.jamendo.com` et `*.storage.jamendo.com`. Un morceau
+ajouté est téléchargé dans la bibliothèque du compte (comme une musique importée) : l'export
+fonctionne sans dépendre de Jamendo. Son crédit (« Titre » par Artiste, licence, lien) est gardé
+et affiché à l'export, prêt à copier dans la description.
+
 ### Quelle version tourne ?
 
 Chaque build porte un numéro : **version** (champ `version` du `package.json` racine, à augmenter

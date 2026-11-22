@@ -40,7 +40,7 @@ export interface VideoItem {
 export type MediaItem = ImageItem | VideoItem;
 export type ContentItem = TextItem | MediaItem;
 
-export const MAX_MEDIA = 6;
+export const MAX_MEDIA = 10;
 export const MAX_TEXTS = 3;
 
 export type Orientation = "landscape" | "portrait" | "square";
@@ -165,7 +165,8 @@ export function sceneToContent(scene: Scene): ContentItem[] {
   const sizes = media.map(area);
   const sorted = [...sizes].sort((x, y) => y - x);
   const ranked = [...media];
-  if (media.length > 1 && (sorted[0] as number) >= 1.6 * (sorted[1] as number)) {
+  // (seuil élevé : dans une mosaïque ajustée, une photo paysage est naturellement plus grande)
+  if (media.length > 1 && (sorted[0] as number) >= 2.2 * (sorted[1] as number)) {
     const [hero] = ranked.splice(sizes.indexOf(sorted[0] as number), 1);
     if (hero) ranked.unshift(hero);
   }

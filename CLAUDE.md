@@ -21,8 +21,13 @@ Interface et commentaires en français.
 
 - Base `node:sqlite` (`apps/server/src/db.ts`). Changer le schéma = **ajouter** une
   migration à la fin de `MIGRATIONS`, jamais modifier une migration existante.
-- Toute route sous `/api/projects`, `/api/assets`, `/api/videos`, `/api/templates` passe par
-  `requireUser` ; chaque requête SQL filtre sur `user_id = c.var.user.id`.
+- Toute route sous `/api/projects`, `/api/assets`, `/api/videos`, `/api/templates`, `/api/music` passe
+  par `requireUser` ; chaque requête SQL filtre sur `user_id = c.var.user.id`.
+- **Musique Jamendo** (`music/jamendo.ts`, `routes/music.ts`, testés avec un faux `fetch` passé à
+  `createApp`) : le navigateur n'envoie qu'un identifiant de morceau, l'adresse de téléchargement
+  vient toujours de l'API Jamendo (pas de SSRF). L'import passe par `saveDownloaded` (plafonné à
+  `MAX_UPLOAD_MB`) et enregistre `credit` / `source_url` / `source_key` (migration 4, anti-doublon).
+  Le crédit suit le morceau dans `AudioClip.credit`.
 - Les fichiers `/files/<nom>` ne sont servis qu'à leur propriétaire.
 - `createApp()` (app.ts) est testable sans réseau : voir `app.test.ts`.
 
@@ -108,13 +113,20 @@ Le CSS supporté est limité : https://www.remotion.dev/docs/client-side-renderi
   pour « Changer de mise en page »), `fit.ts` (zones, grilles, photo/polaroid logés dans une
   case, police qui fait tenir une pile de textes **sans couper de mot**), `builder.ts`
   (`PageBuilder` : pose photos/textes/aplats aux couleurs du thème, note, animations ; les
-  6 `LAYOUT_STYLES`), `library.ts` (`LAYOUTS`), `propose.ts` (classement + « tours » de styles).
+  12 `LAYOUT_STYLES`, avec filtre et grain facultatifs), `library.ts` (`LAYOUTS` = la réunion de
+  `dispositions/text.ts`, `single.ts`, `few.ts`, `many.ts` ; aides communes dans `helpers.ts`),
+  `propose.ts` (classement + « tours » de styles, ou un seul style choisi).
+- Jusqu'à 10 photos (`MAX_MEDIA`). Géométrie dans `fit.ts` : `bestGrid`, `justifiedRows`
+  (mosaïque ajustée, presque sans rognage), `masonry`, `cascade`, `ring`. `prior` < 0 pour les
+  dispositions « fantaisie » (formes) : elles passent après les classiques à note égale.
 - Une disposition ne pose que des calques existants : rien de nouveau à exporter. Elle ne doit
   pas sortir de l'image (le test le vérifie pour tous les formats), sauf un décor nommé « … déborde ».
 - Les textes posés sur plusieurs lignes n'utilisent jamais `box` (export) : un aplat
   (`addPanel`) est placé derrière.
 - `relayoutScene` remplace calques + fond et garde id, nom (sauf nom automatique), durée,
-  transition. Le contenu relu garde l'ordre des photos (la mise en avant reste n° 1).
+  transition. Le contenu relu garde l'ordre des photos (la mise en avant, ≥ 2,2× plus grande,
+  reste n° 1) : une disposition doit poser ses photos dans l'ordre de lecture (testé), sauf les
+  mosaïques libres listées dans `FREE_ORDER` du test.
 
 ## Durée par page (`features/storyboard/DurationBar.tsx`)
 
@@ -132,6 +144,24 @@ schéma (`layers.ts`) → rendu (`composition/src/layers/registry.tsx`) → rég
 (`editor/src/features/inspector/sections/` + `TYPE_SECTIONS`) → icône dans `SceneInspector` →
 champs px dans `resizeLayer` / frames dans `retimeScene`. TypeScript signale la plupart des oublis
 (pas `resizeLayer` ni `retimeScene` : à vérifier à la main).
+
+## Fluidité (à garder en tête)
+
+- **Photos** : l'éditeur affiche des copies réduites (2048 px, 360 px pour les petites vignettes),
+  calculées dans un worker (`lib/previewImages.ts`, `lib/previewWorker.ts`) et fournies à la
+  composition par `ImageSourcesContext` (dans `App.tsx`). La composition lit ses images avec
+  `useImageSrc`. L'export (`renderMediaOnWeb`, rendu à part) n'a pas ce fournisseur : il garde
+  les originales. Toute nouvelle `<Img>` de la composition doit passer par `useImageSrc`, toute
+  petite image d'interface par `TileImg`.
+- **Gestes à la souris** : une mise à jour du projet par image affichée (`useRafBatch`), `flush()`
+  en fin de geste.
+- **Abonnements au store** : éviter `useProject()` dans un composant qui n'a besoin que du format
+  (`useProjectFormat`), du thème (`useProjectTheme`) ou de quelques champs (`useShallow`) ; sinon il
+  est redessiné à chaque modification. Les vignettes mémoïsées reçoivent des props simples.
+- **Propositions de mise en page** : `planProposals` ne construit que la page affichée ; les cartes
+  sont une image fixe (`Thumbnail`) et ne s'animent qu'au survol (Player superposé, sans
+  remplacer l'image : sinon un clic ou un toucher pendant le changement est perdu).
+- Le brouillon local du projet (localStorage) est écrit au plus toutes les 0,4 s.
 
 ## Numéro de version
 

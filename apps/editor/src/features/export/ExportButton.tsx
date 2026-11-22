@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { downloadBlob } from "../../lib/media";
 import { navigate } from "../../lib/router";
 import { useEditor } from "../../store/editorStore";
+import { MusicCredits, useMusicCredits } from "../library/music/MusicCredits";
 import { playerRef } from "../preview/playerController";
 import { EXPORT_QUALITIES, type ExportQuality, exportScale, exportSize } from "./quality";
 
@@ -40,6 +41,7 @@ export function ExportButton() {
   const width = useEditor((s) => s.project.width);
   const height = useEditor((s) => s.project.height);
   const fps = useEditor((s) => s.project.fps);
+  const credits = useMusicCredits();
 
   const chooseQuality = (q: ExportQuality) => {
     setQuality(q);
@@ -155,6 +157,7 @@ export function ExportButton() {
             <p className="text-[10px] text-ink-faint leading-snug">
               {fps} images/s. La 4K prend nettement plus de temps et n'est pas gérée par tous les navigateurs.
             </p>
+            <MusicCredits credits={credits} />
             <Button
               variant="primary"
               size="sm"
@@ -184,6 +187,14 @@ export function ExportButton() {
                   Vidéo prête, mais pas enregistrée sur le serveur ({state.uploadError}). Télécharge-la pour la garder.
                 </p>
               )}
+              {credits.length > 0 ? (
+                <div className="mt-2">
+                  <MusicCredits credits={credits} />
+                  <p className="mt-1 text-[10px] text-ink-faint">
+                    À mettre dans la description si tu partages la vidéo.
+                  </p>
+                </div>
+              ) : null}
               <div className="mt-3 flex gap-2">
                 <Button size="sm" variant="primary" onClick={() => downloadBlob(state.blob, state.filename)}>
                   <Download size={13} /> Télécharger

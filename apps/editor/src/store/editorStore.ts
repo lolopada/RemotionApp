@@ -17,6 +17,7 @@ import {
 import { temporal } from "zundo";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { useShallow } from "zustand/react/shallow";
 
 /** pending = modifs pas encore envoyées ; error/offline = réessai automatique en cours. */
 export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "offline";
@@ -351,6 +352,14 @@ export const useHistory = () => useEditor.temporal.getState();
 
 // Sélecteurs pratiques
 export const useProject = () => useEditor((s) => s.project);
+/**
+ * Format du projet seul : les composants qui n'ont besoin que de la taille ou de la cadence
+ * ne sont pas redessinés à chaque modification (déplacement d'un calque, saisie…).
+ */
+export const useProjectFormat = () =>
+  useEditor(useShallow((s) => ({ width: s.project.width, height: s.project.height, fps: s.project.fps })));
+export const useProjectTheme = () => useEditor((s) => s.project.theme);
+export const useProjectFps = () => useEditor((s) => s.project.fps);
 export const useSelectedScene = () =>
   useEditor((s) => s.project.scenes.find((sc) => sc.id === s.selectedSceneId) ?? s.project.scenes[0]);
 export const useSelectedLayer = () =>

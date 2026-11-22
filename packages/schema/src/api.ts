@@ -39,6 +39,45 @@ export interface StoredFile {
   height: number | null;
   durationSeconds: number | null;
   createdAt: string;
+  /** Crédit à citer (musique importée depuis Jamendo…), null pour un fichier à soi. */
+  credit: string | null;
+  /** Page d'origine (fiche du morceau sur Jamendo…). */
+  sourceUrl: string | null;
+}
+
+/** Licence Creative Commons d'un morceau, lue depuis son adresse (ex. « by-nc-sa 3.0 »). */
+export interface MusicLicense {
+  /** « by », « by-sa », « by-nc », « by-nc-nd »… ; « » si inconnue. */
+  code: string;
+  /** « CC BY-NC-SA 3.0 » */
+  label: string;
+  url: string;
+}
+
+/** Morceau proposé par la recherche de musique (Jamendo). */
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  durationSeconds: number;
+  /** Pochette (petite image), « » si absente. */
+  cover: string;
+  /** Flux d'écoute (MP3), lu directement depuis Jamendo. */
+  previewUrl: string;
+  /** Fiche du morceau sur Jamendo. */
+  pageUrl: string;
+  license: MusicLicense;
+  /** L'artiste autorise le téléchargement (sinon le morceau ne peut pas être ajouté). */
+  downloadable: boolean;
+  instrumental: boolean;
+  /** Genres et ambiances indiqués par Jamendo. */
+  tags: string[];
+}
+
+export interface MusicSearchResult {
+  tracks: MusicTrack[];
+  /** Position de la page suivante, null s'il n'y en a plus. */
+  nextOffset: number | null;
 }
 
 /**

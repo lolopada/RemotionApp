@@ -19,6 +19,7 @@ ENV_FILE="/etc/montage.env"
 PORT="3001"
 DOMAIN=""
 CLOSED="no"          # yes = ALLOW_SIGNUP=false dès l'installation
+JAMENDO=""           # clé « client_id » Jamendo (propositions de musique)
 BACKUP_TIMER="yes"
 SOURCE=""
 PULL="no"
@@ -38,6 +39,8 @@ Usage : $0 [options]
   --port N          port d'écoute (défaut : $PORT)
   --data-dir DIR    base + fichiers des comptes (défaut : $DATA_DIR)
   --closed          ferme les inscriptions (ALLOW_SIGNUP=false)
+  --jamendo CLÉ     active les propositions de musique (client_id Jamendo, gratuit :
+                    https://devportal.jamendo.com) ; enregistrée dans /etc/montage.env
   --no-backup-timer n'installe pas la sauvegarde quotidienne
   -h, --help        cette aide
 USAGE
@@ -53,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --port) PORT="$2"; shift 2 ;;
     --data-dir) DATA_DIR="$2"; shift 2 ;;
     --closed) CLOSED="yes"; shift ;;
+    --jamendo) JAMENDO="$2"; shift 2 ;;
     --no-backup-timer) BACKUP_TIMER="no"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Option inconnue : $1" >&2; usage; exit 2 ;;
@@ -231,11 +235,23 @@ ALLOW_SIGNUP=$([[ $CLOSED == yes ]] && echo false || echo true)
 SESSION_DAYS=60
 VERSION_INTERVAL_MINUTES=10
 MAX_AUTO_VERSIONS=50
+# Propositions de musique (onglet Musique) : clé « client_id » Jamendo, gratuite pour un
+# usage non commercial, à créer sur https://devportal.jamendo.com. Vide = désactivé.
+JAMENDO_CLIENT_ID=
 ENV
   chmod 0640 "$ENV_FILE"; chown root:"$APP_USER" "$ENV_FILE"
   ok "$ENV_FILE créé"
 else
   ok "$ENV_FILE conservé (tes réglages ne sont pas touchés)"
+fi
+# Clé Jamendo donnée en option : ajoutée ou remplacée dans la configuration.
+if [[ -n "$JAMENDO" ]]; then
+  if grep -qE '^#? *JAMENDO_CLIENT_ID=' "$ENV_FILE"; then
+    sed -i -E "s|^#? *JAMENDO_CLIENT_ID=.*|JAMENDO_CLIENT_ID=$JAMENDO|" "$ENV_FILE"
+  else
+    printf '\n# Propositions de musique (https://devportal.jamendo.com)\nJAMENDO_CLIENT_ID=%s\n' "$JAMENDO" >> "$ENV_FILE"
+  fi
+  ok "propositions de musique Jamendo activées"
 fi
 # Le port réellement utilisé est celui du fichier de configuration.
 PORT="$(grep -E '^PORT=' "$ENV_FILE" | tail -n1 | cut -d= -f2)"; PORT="${PORT:-3001}"
@@ -367,3 +383,9 @@ ${B}Ensuite${N} :
   3. Teste tout :  node $APP_DIR/deploy/smoke-test.mjs https://${DOMAIN:-montage.exemple.fr} --user TEST --password '…' --browser
   4. Santé du serveur :  montage-doctor
 DONE
+if ! grep -qE '^JAMENDO_CLIENT_ID=.+' "$ENV_FILE"; then
+  cat <<DONE
+  5. Propositions de musique : crée une clé gratuite sur https://devportal.jamendo.com
+     (« client_id »), puis :  ./deploy/install.sh --jamendo TA_CLE
+DONE
+fi

@@ -1,5 +1,12 @@
 export { AudioTrack, clipVolumeAt } from "./AudioTrack";
-export { type RenderMode, RenderModeContext, useRenderMode } from "./context";
+export {
+  type ImageSources,
+  ImageSourcesContext,
+  type RenderMode,
+  RenderModeContext,
+  useImageSrc,
+  useRenderMode,
+} from "./context";
 export { applyEasing, computeAnimation } from "./effects/animations";
 export { BackgroundGraphic, type BackgroundGraphicProps } from "./effects/backgrounds";
 export { getMaskStyle } from "./effects/masks";

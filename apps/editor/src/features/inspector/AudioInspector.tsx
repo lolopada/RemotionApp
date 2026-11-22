@@ -3,6 +3,7 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { Field, IconButton, NumberInput, Section, Slider, TextInput } from "../../components/ui";
 import { WaveformPicker } from "../../components/WaveformPicker";
 import { useEditor, useProject } from "../../store/editorStore";
+import { MusicCredits } from "../library/music/MusicCredits";
 
 export function AudioInspector({ clip }: { clip: AudioClip }) {
   const project = useProject();
@@ -42,6 +43,7 @@ export function AudioInspector({ clip }: { clip: AudioClip }) {
           La partie claire est jouée. Clique la courbe pour choisir le début ; coupe début et fin en tirant les bords du
           morceau dans la piste sous le storyboard.
         </p>
+        {clip.credit ? <MusicCredits credits={[clip.credit]} compact /> : null}
         <Field label="Nom">
           <TextInput value={clip.name} onChange={(v) => update((c) => void (c.name = v))} />
         </Field>

@@ -3,14 +3,14 @@ import { createVideoLayer } from "@app/schema";
 import { Clapperboard, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { getVideoMeta } from "../../lib/media";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useEditor, useProjectFormat } from "../../store/editorStore";
 import { TabHeader } from "./LibraryPanel";
 import { UploadButton } from "./UploadButton";
 import { useAssets } from "./useAssets";
 
 /** Vidéos importées : un clic ajoute un calque vidéo au centre de la scène. */
 export function VideoTab() {
-  const project = useProject();
+  const project = useProjectFormat();
   const { addLayer } = useEditor.getState();
   const { assets, error, uploading, upload, remove } = useAssets("video");
   const [adding, setAdding] = useState<string | null>(null);

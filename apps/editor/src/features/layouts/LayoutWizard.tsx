@@ -1,6 +1,6 @@
 import { ScenePreview } from "@app/composition";
 import { applyThemeToScene, createScene, duplicateScene, type StoredFile } from "@app/schema";
-import { Player } from "@remotion/player";
+import { Player, Thumbnail } from "@remotion/player";
 import clsx from "clsx";
 import {
   ChevronLeft,
@@ -15,11 +15,13 @@ import {
   Type,
   X,
 } from "lucide-react";
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { TileImg } from "../../components/TileImg";
 import { api } from "../../lib/api";
 import { getImageSize, getVideoMeta } from "../../lib/media";
 import { useEditor, useProject } from "../../store/editorStore";
 import { useAssets } from "../library/useAssets";
+import { LAYOUT_STYLES } from "./builder";
 import {
   type ContentItem,
   MAX_MEDIA,
@@ -30,7 +32,7 @@ import {
   type TextItem,
   type TextRole,
 } from "./content";
-import { type Proposal, proposeAll, relayoutScene } from "./propose";
+import { type Proposal, planProposals, relayoutScene } from "./propose";
 import { useLayoutWizard, type WizardRequest } from "./wizardStore";
 
 const PER_PAGE = 6;
@@ -85,15 +87,17 @@ function WizardDialog({ request }: { request: WizardRequest }) {
   const content = useDeferredValue(items);
   const { width, height, fps, theme } = project;
   const sceneSeconds = project.defaultSceneSeconds;
-  const all = useMemo(
-    () => proposeAll(content, { width, height, fps, sceneSeconds }, theme),
-    [content, width, height, fps, sceneSeconds, theme],
+  const [styleId, setStyleId] = useState<string>("");
+  // Seules les propositions affichées sont construites (voir planProposals).
+  const plan = useMemo(
+    () => planProposals(content, { width, height, fps, sceneSeconds }, theme, styleId || null),
+    [content, width, height, fps, sceneSeconds, theme, styleId],
   );
-  const pageCount = Math.max(1, Math.ceil(all.length / PER_PAGE));
+  const pageCount = Math.max(1, Math.ceil(plan.count / PER_PAGE));
   const current = page % pageCount;
-  const shown = all.slice(current * PER_PAGE, current * PER_PAGE + PER_PAGE);
+  const shown = useMemo(() => plan.slice(current * PER_PAGE, current * PER_PAGE + PER_PAGE), [plan, current]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: on revient aux meilleures idées quand le contenu change
-  useEffect(() => setPage(0), [content]);
+  useEffect(() => setPage(0), [content, styleId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
@@ -147,13 +151,15 @@ function WizardDialog({ request }: { request: WizardRequest }) {
     setItems((prev) => prev.map((i) => (i.id === id && i.kind === "text" ? { ...i, ...patch } : i)));
   const addText = () => setItems((prev) => [...prev, { kind: "text", id: localId(), text: "", role: null }]);
 
-  const pick = (p: Proposal) => {
+  // Fonction stable : les cartes (mémoïsées) ne sont pas redessinées à chaque frappe.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: la demande ne change pas pendant la vie de la fenêtre
+  const pick = useCallback((p: Proposal) => {
     // Copie avec de nouveaux identifiants : la même proposition peut servir deux fois.
     const scene = duplicateScene(p.scene);
     if (request.mode === "new") addScene(scene, request.afterId);
     else updateScene(request.sceneId, (s) => relayoutScene(s, { ...p, scene }));
     close();
-  };
+  }, []);
 
   const blankPage = () => {
     const scene = createScene({ durationInFrames: Math.round((sceneSeconds ?? 4) * fps) });
@@ -221,7 +227,7 @@ function WizardDialog({ request }: { request: WizardRequest }) {
                       className="group relative aspect-square overflow-hidden rounded-md bg-black ring-1 ring-line"
                     >
                       {m.kind === "image" ? (
-                        <img src={m.src} alt={m.name} className="size-full object-cover" />
+                        <TileImg src={m.src} alt={m.name} />
                       ) : (
                         <>
                           <video src={`${m.src}#t=0.1`} muted preload="metadata" className="size-full object-cover" />
@@ -363,20 +369,44 @@ function WizardDialog({ request }: { request: WizardRequest }) {
         <section aria-label="Propositions" className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center gap-2 border-line border-b px-4 py-2.5">
             <h3 className="font-semibold text-sm">Propositions</h3>
-            {all.length > 0 ? (
+            {plan.count > 0 ? (
               <span className="text-[11px] text-ink-faint tabular-nums">
-                {pageCount > 1 ? `idées ${current + 1}/${pageCount}` : `${all.length} idées`}
+                {pageCount > 1 ? `idées ${current + 1}/${pageCount}` : `${plan.count} idées`}
               </span>
             ) : null}
             <span className="flex-1" />
+            <select
+              aria-label="Style des propositions"
+              value={styleId}
+              onChange={(e) => setStyleId(e.currentTarget.value)}
+              className="h-8 rounded-md border border-line bg-canvas px-2 text-ink-muted text-xs outline-none focus:border-accent"
+            >
+              <option value="">Tous les styles</option>
+              {LAYOUT_STYLES.map((st) => (
+                <option key={st.id} value={st.id}>
+                  Style « {st.name} »
+                </option>
+              ))}
+            </select>
             {pageCount > 1 ? (
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                className="flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-white text-xs transition hover:bg-accent-hover"
-              >
-                <Shuffle size={13} /> Autres idées
-              </button>
+              <>
+                <button
+                  type="button"
+                  aria-label="Idées précédentes"
+                  title="Idées précédentes"
+                  onClick={() => setPage((p) => (p + pageCount - 1) % pageCount)}
+                  className="flex size-8 items-center justify-center rounded-md border border-line text-ink-muted transition hover:border-accent hover:text-ink"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p + 1)}
+                  className="flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-white text-xs transition hover:bg-accent-hover"
+                >
+                  <Shuffle size={13} /> Autres idées
+                </button>
+              </>
             ) : null}
             {request.mode === "new" ? (
               <button
@@ -428,7 +458,16 @@ function WizardDialog({ request }: { request: WizardRequest }) {
   );
 }
 
-/** Une proposition : la scène jouée en boucle par la même composition que l'aperçu. */
+/** Moment où tous les calques sont arrivés (fin des animations d'entrée). */
+function settledFrame(scene: Proposal["scene"]): number {
+  const end = Math.max(
+    0,
+    ...scene.layers.map((l) => l.animation.enterDelayInFrames + l.animation.enterDurationInFrames),
+  );
+  return Math.min(scene.durationInFrames - 1, end + 2);
+}
+
+/** Une proposition : image fixe de la scène, animée au survol (même composition que l'aperçu). */
 const ProposalCard = memo(function ProposalCard({
   proposal,
   width,
@@ -443,32 +482,48 @@ const ProposalCard = memo(function ProposalCard({
   onPick: (p: Proposal) => void;
 }) {
   const inputProps = useMemo(() => ({ scene: proposal.scene, showPlaceholders: false }), [proposal.scene]);
+  const settled = useMemo(() => settledFrame(proposal.scene), [proposal.scene]);
+  // Image fixe (la page une fois tout arrivé) ; l'animation ne se joue qu'au survol, une fois.
+  const [hover, setHover] = useState(false);
+  const common = {
+    component: ScenePreview,
+    inputProps,
+    durationInFrames: proposal.scene.durationInFrames,
+    compositionWidth: width,
+    compositionHeight: height,
+    fps,
+    style: { width: "100%", aspectRatio: `${width} / ${height}` },
+  };
   return (
     <button
       type="button"
       onClick={() => onPick(proposal)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
       data-layout={proposal.layoutId}
       className="group text-left"
       title="Utiliser cette mise en page"
     >
-      <div className="overflow-hidden rounded-lg ring-1 ring-line transition group-hover:ring-2 group-hover:ring-accent">
-        <Player
-          component={ScenePreview}
-          inputProps={inputProps}
-          durationInFrames={proposal.scene.durationInFrames}
-          compositionWidth={width}
-          compositionHeight={height}
-          fps={fps}
-          style={{ width: "100%", aspectRatio: `${width} / ${height}` }}
-          autoPlay
-          loop
-          initiallyMuted
-          controls={false}
-          clickToPlay={false}
-          doubleClickToFullscreen={false}
-          spaceKeyToPlayOrPause={false}
-          acknowledgeRemotionLicense
-        />
+      <div className="relative overflow-hidden rounded-lg ring-1 ring-line transition group-hover:ring-2 group-hover:ring-accent">
+        <Thumbnail {...common} frameToDisplay={settled} />
+        {/* L'animation se pose par-dessus l'image fixe (sans la remplacer : un clic ou un toucher
+            pendant le changement serait perdu) et ne capte pas la souris. */}
+        {hover ? (
+          <div className="pointer-events-none absolute inset-0">
+            <Player
+              {...common}
+              autoPlay
+              initiallyMuted
+              controls={false}
+              clickToPlay={false}
+              doubleClickToFullscreen={false}
+              spaceKeyToPlayOrPause={false}
+              acknowledgeRemotionLicense
+            />
+          </div>
+        ) : null}
       </div>
       <span className="mt-1.5 block truncate text-[11px] text-ink-muted">
         {proposal.layoutName} <span className="text-ink-faint">· {proposal.styleName}</span>
@@ -501,7 +556,7 @@ function LibraryPicker({ onPick, used }: { onPick: (a: StoredFile) => void; used
           {a.kind === "video" ? (
             <video src={`${a.url}#t=0.1`} muted preload="metadata" className="size-full object-cover" />
           ) : (
-            <img src={a.url} alt={a.name} loading="lazy" className="size-full object-cover" />
+            <TileImg src={a.url} alt={a.name} />
           )}
         </button>
       ))}

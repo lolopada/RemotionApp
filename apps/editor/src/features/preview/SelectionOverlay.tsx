@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { assignImage, getImageAspect } from "../../lib/images";
+import { useRafBatch } from "../../lib/useRafBatch";
 import { useEditor } from "../../store/editorStore";
 import { CropOverlay } from "./CropOverlay";
 import { ASSET_DRAG_TYPE, getDraggedAsset } from "./dnd";
@@ -55,6 +56,8 @@ export function SelectionOverlay({ scene, scale }: { scene: Scene; scale: number
   const drag = useRef<Drag | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  // Une mise à jour du calque par image affichée, quel que soit le nombre d'événements souris.
+  const { schedule, flush } = useRafBatch();
 
   const toComp = (clientX: number, clientY: number) => {
     const rect = ref.current?.getBoundingClientRect();
@@ -88,10 +91,15 @@ export function SelectionOverlay({ scene, scale }: { scene: Scene; scale: number
       setHoverId(layerAt(e.clientX, e.clientY)?.id ?? null);
       return;
     }
-    let dx = (e.clientX - d.pointerX) / scale;
-    let dy = (e.clientY - d.pointerY) / scale;
+    const { clientX, clientY, altKey } = e;
+    schedule(() => moveLayer(d, clientX, clientY, altKey));
+  };
+
+  const moveLayer = (d: Drag, clientX: number, clientY: number, altKey: boolean) => {
+    let dx = (clientX - d.pointerX) / scale;
+    let dy = (clientY - d.pointerY) / scale;
     const layer = scene.layers.find((l) => l.id === d.layerId);
-    if (layer && !e.altKey) {
+    if (layer && !altKey) {
       const { width, height } = useEditor.getState().project;
       const t = layer.transform;
       const snap = snapMove(
@@ -112,6 +120,7 @@ export function SelectionOverlay({ scene, scale }: { scene: Scene; scale: number
   };
 
   const endDrag = () => {
+    flush();
     drag.current = null;
     setGuides([]);
   };
@@ -135,16 +144,21 @@ export function SelectionOverlay({ scene, scale }: { scene: Scene; scale: number
     const g = gesture.current;
     if (!g) return;
     e.stopPropagation();
-    const p = toComp(e.clientX, e.clientY);
+    const { clientX, clientY, shiftKey, altKey } = e;
+    schedule(() => applyGesture(g, clientX, clientY, shiftKey, altKey));
+  };
+
+  const applyGesture = (g: Gesture, clientX: number, clientY: number, shiftKey: boolean, altKey: boolean) => {
+    const p = toComp(clientX, clientY);
     if (g.kind === "rotate") {
-      const angle = rotationFromPointer(boxCenter(g.start), p.x, p.y, e.shiftKey ? 15 : 0);
+      const angle = rotationFromPointer(boxCenter(g.start), p.x, p.y, shiftKey ? 15 : 0);
       updateLayer(g.layerId, (l) => void (l.transform.rotation = angle));
       setBadge(`${Math.round(angle)}°`);
       return;
     }
     const isCorner = g.dir.hx !== 0 && g.dir.hy !== 0;
-    const r = resizeBox(g.start, g.dir, p.x, p.y, { keepRatio: isCorner && !e.shiftKey, fromCenter: e.altKey });
-    const scaleText = g.startFontSize !== null && isCorner && !e.shiftKey;
+    const r = resizeBox(g.start, g.dir, p.x, p.y, { keepRatio: isCorner && !shiftKey, fromCenter: altKey });
+    const scaleText = g.startFontSize !== null && isCorner && !shiftKey;
     updateLayer(g.layerId, (l) => {
       l.transform.x = Math.round(r.x);
       l.transform.y = Math.round(r.y);
@@ -160,6 +174,7 @@ export function SelectionOverlay({ scene, scale }: { scene: Scene; scale: number
   const endGesture = (e: React.PointerEvent) => {
     if (!gesture.current) return;
     e.stopPropagation();
+    flush();
     gesture.current = null;
     setBadge(null);
   };

@@ -4,7 +4,7 @@ import { FlipHorizontal2, FlipVertical2, Timer, Volume2, VolumeX } from "lucide-
 import { ShapeIcon } from "../../../components/ShapeIcon";
 import { Button, Field, NumberInput, Section, Select, Slider, Toggle } from "../../../components/ui";
 import { WaveformPicker } from "../../../components/WaveformPicker";
-import { useEditor, useProject } from "../../../store/editorStore";
+import { useEditor, useProjectFormat } from "../../../store/editorStore";
 import { DropShadowSection } from "./DropShadowSection";
 import { FilterSection } from "./FilterSection";
 import { SHAPE_LABELS } from "./ImageSection";
@@ -13,7 +13,7 @@ import type { SectionProps } from "./types";
 const RATES = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((v) => ({ value: String(v), label: `${v}×` }));
 
 export function VideoSection({ layer, update }: SectionProps<VideoLayer>) {
-  const project = useProject();
+  const project = useProjectFormat();
   const sceneId = useEditor((s) => s.selectedSceneId);
   const fps = project.fps;
   const total = layer.sourceDurationSeconds;

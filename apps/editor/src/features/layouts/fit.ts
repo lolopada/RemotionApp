@@ -91,6 +91,110 @@ function centerLastRow(cells: Rect[], cols: number, rows: number, n: number, gap
   return cells.map((c, i) => (i >= (rows - 1) * cols ? { ...c, x: c.x + shift } : c));
 }
 
+/**
+ * Rangées « ajustées » (façon album photo) : chaque rangée a la hauteur qui fait tenir ses
+ * photos entières sur toute la largeur, puis on étire légèrement les rangées pour remplir
+ * la hauteur. On garde le nombre de rangées qui déforme le moins. Les photos sont donc très
+ * peu rognées, quel que soit leur format.
+ */
+export function justifiedRows(r: Rect, aspects: number[], gap = 0): Rect[] {
+  const n = aspects.length;
+  if (n === 0) return [];
+  let best: Rect[] = [];
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let rows = 1; rows <= n; rows++) {
+    // Répartition régulière : les premières rangées prennent une photo de plus.
+    const counts = Array.from({ length: rows }, (_, i) => Math.floor(n / rows) + (i < n % rows ? 1 : 0));
+    let k = 0;
+    const heights = counts.map((c) => {
+      const sum = aspects.slice(k, k + c).reduce((a, b) => a + b, 0);
+      k += c;
+      return (r.width - gap * (c - 1)) / sum;
+    });
+    const natural = heights.reduce((a, b) => a + b, 0);
+    const stretch = (r.height - gap * (rows - 1)) / natural;
+    if (stretch <= 0) continue;
+    const score = Math.abs(Math.log(stretch));
+    if (score >= bestScore) continue;
+    bestScore = score;
+    best = [];
+    let y = r.y;
+    k = 0;
+    counts.forEach((c, row) => {
+      const h = (heights[row] as number) * stretch;
+      let x = r.x;
+      for (let i = 0; i < c; i++) {
+        const w = (heights[row] as number) * (aspects[k] as number);
+        best.push(rect(x, y, w, h));
+        x += w + gap;
+        k++;
+      }
+      y += h + gap;
+    });
+  }
+  return best;
+}
+
+/**
+ * Colonnes « maçonnerie » : les photos sont distribuées colonne après colonne, à leur hauteur
+ * naturelle, puis chaque colonne est étirée pour remplir la zone. Ordre de sortie = ordre des photos.
+ */
+export function masonry(r: Rect, aspects: number[], cols: number, gap = 0): Rect[] {
+  const n = aspects.length;
+  cols = Math.max(1, Math.min(cols, n));
+  const w = (r.width - gap * (cols - 1)) / cols;
+  const columns: number[][] = Array.from({ length: cols }, () => []);
+  aspects.forEach((_, i) => {
+    // Chacune son tour (ordre de lecture gardé, ligne par ligne) ; aucune colonne vide.
+    const c = i % cols;
+    columns[c]?.push(i);
+  });
+  const out = new Array<Rect>(n);
+  columns.forEach((items, c) => {
+    const natural = items.reduce((s, i) => s + w / (aspects[i] as number), 0);
+    const k = (r.height - gap * (items.length - 1)) / natural;
+    let y = r.y;
+    for (const i of items) {
+      const h = (w / (aspects[i] as number)) * k;
+      out[i] = rect(r.x + c * (w + gap), y, w, h);
+      y += h + gap;
+    }
+  });
+  return out;
+}
+
+/**
+ * Cases qui se chevauchent en diagonale (du coin haut-gauche au coin bas-droit) : `size` est la
+ * part de la zone occupée par chaque case.
+ */
+export function cascade(r: Rect, n: number, size = 0.55): Rect[] {
+  const w = r.width * size;
+  const h = r.height * size;
+  return Array.from({ length: n }, (_, i) => {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    return rect(r.x + (r.width - w) * t, r.y + (r.height - h) * t, w, h);
+  });
+}
+
+/** Cases du tour d'une grille `cols` × `rows`, dans l'ordre de lecture, + le centre. */
+export function ring(r: Rect, cols: number, rows: number, gap = 0): { cells: Rect[]; center: Rect } {
+  const all = grid(r, cols, rows, gap);
+  const at = (i: number, j: number) => all[j * cols + i] as Rect;
+  const cells: Rect[] = [];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) if (j === 0 || j === rows - 1 || i === 0 || i === cols - 1) cells.push(at(i, j));
+  }
+  const a = at(1, 1);
+  const b = at(cols - 2, rows - 2);
+  return { cells, center: rect(a.x, a.y, b.x + b.width - a.x, b.y + b.height - a.y) };
+}
+
+/** Carré de côté `size` (fraction du petit côté) centré dans la zone. */
+export function squareIn(r: Rect, size = 1): Rect {
+  const s = Math.min(r.width, r.height) * size;
+  return rect(r.x + (r.width - s) / 2, r.y + (r.height - s) / 2, s, s);
+}
+
 /** Plus grand rectangle de ratio `aspect` centré dans la zone (la photo entière y tient). */
 export function fitInside(r: Rect, aspect: number, scale = 1): Rect {
   let w = r.width * scale;
@@ -207,7 +311,8 @@ export function fitTextStack(
       const fs = fontSizes[i] as number;
       const maxChars = zone.width / (fs * t.charWidth);
       // Un mot plus long que la ligne serait coupé en deux : on considère que ça ne tient pas.
-      if (longestWord(t.text) > maxChars) return Number.POSITIVE_INFINITY;
+      // (marge de 15 % : un mot isolé peut être fait de lettres larges, « m », « w »…)
+      if (longestWord(t.text) * 1.15 > maxChars) return Number.POSITIVE_INFINITY;
       return Math.ceil(wrapLines(t.text, maxChars) * fs * t.lineHeight);
     });
     const gaps = fontSizes.map((fs, i) => (i < texts.length - 1 ? Math.round(fs * 0.45) : 0));

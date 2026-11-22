@@ -8,8 +8,10 @@ import { type AppEnv, requireUser, sameOrigin } from "./auth/middleware";
 import type { BuildInfo } from "./buildInfo";
 import type { AppConfig } from "./config";
 import { openDb } from "./db";
+import { createJamendo, type Fetch } from "./music/jamendo";
 import { authRoutes } from "./routes/auth";
 import { assetRoutes, videoRoutes } from "./routes/files";
+import { musicRoutes } from "./routes/music";
 import { projectRoutes } from "./routes/projects";
 import { templateRoutes } from "./routes/templates";
 import { createFileStore } from "./storage/fileStore";
@@ -32,8 +34,10 @@ export function createApp(
     | "sessionDays"
     | "versionIntervalMs"
     | "maxAutoVersions"
-  >,
-  opts: { log?: boolean; buildInfo?: BuildInfo } = {},
+  > &
+    Partial<Pick<AppConfig, "jamendoClientId" | "jamendoApiUrl">>,
+  /** `fetch` : accès réseau sortant (Jamendo), remplaçable dans les tests. */
+  opts: { log?: boolean; buildInfo?: BuildInfo; fetch?: Fetch } = {},
 ) {
   const db = openDb(path.join(config.dataDir, "montage.db"));
   const filesDir = path.join(config.dataDir, "files");
@@ -43,6 +47,11 @@ export function createApp(
   const projects = createProjectStore(db, versions);
   const files = createFileStore(db, filesDir);
   const templates = createTemplateStore(db);
+  const jamendo = createJamendo({
+    clientId: config.jamendoClientId ?? "",
+    baseUrl: config.jamendoApiUrl,
+    fetch: opts.fetch,
+  });
   const auth = requireUser(accounts);
 
   const app = new Hono<AppEnv>();
@@ -61,10 +70,12 @@ export function createApp(
   app.use("/api/assets/*", auth);
   app.use("/api/videos/*", auth);
   app.use("/api/templates/*", auth);
+  app.use("/api/music/*", auth);
   app.route("/api/projects", projectRoutes(projects, versions));
   app.route("/api/assets", assetRoutes(files, config.maxUploadBytes));
   app.route("/api/videos", videoRoutes(files, config.maxExportBytes));
   app.route("/api/templates", templateRoutes(templates));
+  app.route("/api/music", musicRoutes(jamendo, files, config.maxUploadBytes));
 
   // Fichiers privés : servis uniquement à leur propriétaire (cookie de session).
   // serveStatic gère les requêtes Range (lecture/avance rapide des vidéos).

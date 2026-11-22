@@ -81,6 +81,14 @@ systemctl is-active --quiet montage-backup.timer && ok "sauvegarde quotidienne p
 echo "Configuration"
 [[ "${ALLOW_SIGNUP:-true}" == "false" ]] && ok "inscriptions fermées" || warn "ALLOW_SIGNUP=true : n'importe qui peut créer un compte"
 echo "  MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-200}  MAX_EXPORT_MB=${MAX_EXPORT_MB:-2048}  SESSION_DAYS=${SESSION_DAYS:-60}"
+if [[ -z "${JAMENDO_CLIENT_ID:-}" ]]; then
+  warn "propositions de musique désactivées (JAMENDO_CLIENT_ID vide : ./deploy/install.sh --jamendo CLÉ)"
+else
+  jam="$(curl -fsS -m 10 "https://api.jamendo.com/v3.0/tracks/?client_id=${JAMENDO_CLIENT_ID}&format=json&limit=1" 2>/dev/null || true)"
+  if grep -q '"status":"success"' <<<"$jam"; then ok "Jamendo répond, la clé est valide"
+  elif [[ -z "$jam" ]]; then bad "Jamendo injoignable depuis le serveur (réseau sortant ?)"
+  else bad "Jamendo refuse la clé : $(grep -o '"error_message":"[^"]*"' <<<"$jam" | head -n1)"; fi
+fi
 
 echo "Journal (dernière heure)"
 errs="$(journalctl -u montage --since '1 hour ago' --no-pager -p err 2>/dev/null | grep -vc -- '^-- ' || true)"

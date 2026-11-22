@@ -1,6 +1,7 @@
 import type { Background } from "@app/schema";
 import { useId, useLayoutEffect, useRef } from "react";
 import { AbsoluteFill, Img } from "remotion";
+import { useImageSrc } from "../context";
 import { linearGradientVector } from "./gradient";
 
 /**
@@ -268,6 +269,11 @@ export interface BackgroundGraphicProps {
 }
 
 /** Le fond seul, sans dépendre du contexte Remotion (utilisé aussi pour les miniatures). */
+/** Photo de fond (copie réduite dans l'éditeur, originale à l'export). */
+function BackgroundImg({ src, style }: { src: string; style: React.CSSProperties }) {
+  return <Img src={useImageSrc(src)} style={style} />;
+}
+
 export function BackgroundGraphic({
   background,
   width,
@@ -299,7 +305,7 @@ export function BackgroundGraphic({
       base = (
         <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
           {background.src ? (
-            <Img
+            <BackgroundImg
               src={background.src}
               style={{
                 width: "100%",

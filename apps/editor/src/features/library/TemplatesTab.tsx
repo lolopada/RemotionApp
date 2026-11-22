@@ -3,13 +3,13 @@ import { adaptScene, applyThemeToScene, duplicateScene, type Scene, type SceneTe
 import { Thumbnail } from "@remotion/player";
 import { Check, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useEditor, useProjectFormat, useProjectTheme } from "../../store/editorStore";
 import { SCENE_TEMPLATES } from "../../templates/sceneTemplates";
 import { TabHeader } from "./LibraryPanel";
 import { useMyTemplates } from "./useMyTemplates";
 
 function SceneThumb({ scene }: { scene: Scene }) {
-  const project = useProject();
+  const project = { ...useProjectFormat(), theme: useProjectTheme() };
   // Tient dans une colonne (≈ 100 px) sans devenir trop haute pour les formats verticaux.
   const width = Math.round(Math.min(100, (125 * project.width) / project.height));
   return (
@@ -34,7 +34,7 @@ function sceneFromTemplate(t: SceneTemplate, to: { width: number; height: number
 }
 
 function MyTemplates() {
-  const project = useProject();
+  const project = { ...useProjectFormat(), theme: useProjectTheme() };
   const addScene = useEditor((s) => s.addScene);
   const { items, error, load, remove, rename } = useMyTemplates();
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -127,7 +127,7 @@ function MyTemplates() {
 }
 
 export function TemplatesTab() {
-  const project = useProject();
+  const project = { ...useProjectFormat(), theme: useProjectTheme() };
   const addScene = useEditor((s) => s.addScene);
   const format = { width: project.width, height: project.height, fps: project.fps };
   const theme = project.theme;

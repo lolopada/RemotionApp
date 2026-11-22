@@ -1,9 +1,26 @@
 import { createImageLayer, createScene, createTextLayer, FORMATS, type Layer, LayerSchema } from "@app/schema";
 import { describe, expect, it } from "vitest";
 import { type ContentItem, resolveRoles, sceneToContent, type TextItem } from "./content";
-import { bestGrid, fitInside, fitTextStack, polaroidInside, rect, wrapLines } from "./fit";
+import {
+  bestGrid,
+  fitInside,
+  fitTextStack,
+  justifiedRows,
+  masonry,
+  polaroidInside,
+  rect,
+  ring,
+  wrapLines,
+} from "./fit";
 import { LAYOUTS } from "./library";
-import { applicableLayouts, proposeAll, proposeLayouts, relayoutScene, suggestedDurationSeconds } from "./propose";
+import {
+  applicableLayouts,
+  planProposals,
+  proposeAll,
+  proposeLayouts,
+  relayoutScene,
+  suggestedDurationSeconds,
+} from "./propose";
 
 const photo = (id: string, aspect = 1.5): ContentItem => ({
   kind: "image",
@@ -79,6 +96,30 @@ describe("géométrie", () => {
     const ratio = (card.width - 2 * m) / (card.height - m - card.height * 0.2);
     expect(ratio).toBeCloseTo(1.5, 1);
   });
+  it("mosaïque ajustée : remplit la zone, photos presque pas rognées", () => {
+    const zone = rect(0, 0, 1800, 900);
+    const as = [1.5, 0.75, 1, 1.5, 1.78, 0.8, 1.33];
+    const cells = justifiedRows(zone, as, 10);
+    expect(cells).toHaveLength(as.length);
+    for (const c of cells) {
+      expect(c.x).toBeGreaterThanOrEqual(-0.01);
+      expect(c.x + c.width).toBeLessThanOrEqual(1800.01);
+      expect(c.y + c.height).toBeLessThanOrEqual(900.01);
+    }
+    const worst = Math.max(...cells.map((c, i) => Math.abs(Math.log(c.width / c.height / (as[i] as number)))));
+    expect(worst).toBeLessThan(0.35);
+  });
+  it("colonnes : toutes remplies, à la hauteur de la zone", () => {
+    const cells = masonry(rect(0, 0, 1000, 800), [1, 0.7, 1.5, 1, 0.8], 3, 10);
+    expect(cells).toHaveLength(5);
+    expect(cells.every((c) => c.y + c.height <= 800.01)).toBe(true);
+    expect(new Set(cells.map((c) => c.x)).size).toBe(3);
+  });
+  it("cadre de photos : le tour d'une grille 4×3 = 10 cases autour du centre", () => {
+    const { cells, center } = ring(rect(0, 0, 400, 300), 4, 3);
+    expect(cells).toHaveLength(10);
+    expect(center).toEqual({ x: 100, y: 100, width: 200, height: 100 });
+  });
   it("choisit une grille sans ligne vide", () => {
     expect(bestGrid(rect(0, 0, 1800, 900), 4, 10, 1.5)).toHaveLength(4);
     const five = bestGrid(rect(0, 0, 1800, 900), 5, 0, 1);
@@ -94,9 +135,20 @@ describe("propositions", () => {
     "2 photos + 2 textes": [photo("a"), photo("b", 0.75), text("t", "Été"), text("s", "Bretagne")],
     "3 photos + texte long": [photo("a"), photo("b"), photo("c"), text("t", "Un long souvenir ".repeat(10))],
     "6 photos": ["a", "b", "c", "d", "e", "f"].map((id) => photo(id)),
+    "4 photos + titre": [photo("a"), photo("b", 0.7), photo("c", 1), photo("d"), text("t", "Quatre")],
+    "8 photos + titre": [...Array.from({ length: 8 }, (_, i) => photo(`p${i}`, i % 3 ? 1.5 : 0.75)), text("t", "Huit")],
+    "10 photos + 2 textes": [
+      ...Array.from({ length: 10 }, (_, i) => photo(`p${i}`, [1.5, 0.75, 1, 1.78][i % 4])),
+      text("t", "Le grand album"),
+      text("s", "Été 2026"),
+    ],
+    "1 vidéo + titre": [
+      { kind: "video", id: "v", src: "/v.mp4", aspect: 1.78, name: "v", durationSeconds: 4 },
+      text("t", "En vidéo"),
+    ],
   };
 
-  for (const format of [FORMATS.landscape, FORMATS.portrait, FORMATS.square]) {
+  for (const format of Object.values(FORMATS)) {
     for (const [label, content] of Object.entries(contents)) {
       it(`${label} en ${format.width}×${format.height} : scènes valides, dans l'image`, () => {
         const all = proposeAll(content, format, null);
@@ -119,10 +171,40 @@ describe("propositions", () => {
 
   it("ne propose que les dispositions qui acceptent le nombre de photos", () => {
     const ids = applicableLayouts([photo("a"), photo("b")]).map((l) => l.id);
-    expect(ids).toContain("grid");
+    expect(ids).toContain("justified");
     expect(ids).not.toContain("bleed-bottom");
     expect(ids).not.toContain("fan");
     expect(applicableLayouts([])).toEqual([]);
+  });
+
+  it("un seul style : chaque disposition une fois, dans ce style", () => {
+    const content = [photo("a"), photo("b"), photo("c"), text("t", "Titre")];
+    const all = proposeAll(content, FORMATS.landscape, null, "carnet");
+    expect(all.length).toBeGreaterThan(10);
+    expect(all.every((p) => p.styleId === "carnet")).toBe(true);
+    expect(new Set(all.map((p) => p.layoutId)).size).toBe(all.length);
+    // Le style « Carnet » réchauffe les photos.
+    const img = all[0]?.scene.layers.find((l) => l.type === "image");
+    expect(img?.type === "image" && img.filter.preset).toBe("warm");
+  });
+
+  it("10 photos : beaucoup de propositions, calcul rapide", () => {
+    const content = [...Array.from({ length: 10 }, (_, i) => photo(`p${i}`, i % 2 ? 0.75 : 1.5)), text("t", "Album")];
+    const t0 = performance.now();
+    const all = proposeAll(content, FORMATS.landscape, null);
+    expect(performance.now() - t0).toBeLessThan(1500);
+    expect(new Set(all.map((p) => p.layoutId)).size).toBeGreaterThanOrEqual(12);
+  });
+
+  it("propositions calculées à la demande : même ordre que la liste complète", () => {
+    const content = [...Array.from({ length: 7 }, (_, i) => photo(`p${i}`, i % 2 ? 0.75 : 1.5)), text("t", "Titre")];
+    const all = proposeAll(content, FORMATS.landscape, null).map((p) => p.key);
+    const plan = planProposals(content, FORMATS.landscape, null);
+    expect(plan.count).toBe(all.length);
+    expect(plan.slice(12, 18).map((p) => p.key)).toEqual(all.slice(12, 18));
+    // Une proposition déjà construite est réutilisée telle quelle.
+    expect(plan.slice(12, 13)[0]).toBe(plan.slice(12, 13)[0]);
+    expect(plan.slice(all.length - 2, all.length + 5)).toHaveLength(2);
   });
 
   it("première page : dispositions toutes différentes", () => {
@@ -168,7 +250,7 @@ describe("propositions", () => {
 
   it("chaque disposition de la bibliothèque est atteignable", () => {
     const counts = new Set<string>();
-    for (let n = 0; n <= 6; n++) {
+    for (let n = 0; n <= 10; n++) {
       const c = [...Array.from({ length: n }, (_, i) => photo(`p${i}`)), text("t", "Titre")];
       for (const p of proposeAll(c, FORMATS.landscape, null)) counts.add(p.layoutId);
     }
@@ -193,6 +275,8 @@ describe("propositions", () => {
     }
   });
 });
+
+const FREE_ORDER = new Set(["masonry", "justified", "justified-bleed"]);
 
 describe("changer de mise en page", () => {
   const scene = createScene({
@@ -231,7 +315,7 @@ describe("changer de mise en page", () => {
 
   it("relire une page générée redonne les photos dans le même ordre (la n° 1 reste en avant)", () => {
     for (const format of [FORMATS.landscape, FORMATS.portrait]) {
-      for (let n = 1; n <= 6; n++) {
+      for (let n = 1; n <= 10; n++) {
         const content = [
           ...Array.from({ length: n }, (_, i) => photo(`p${i}`, [1.5, 0.75, 1][i % 3])),
           text("t", "Titre"),
@@ -241,9 +325,10 @@ describe("changer de mise en page", () => {
           const srcs = sceneToContent(p.scene)
             .filter((c) => c.kind === "image")
             .map((c) => (c as { src: string }).src);
-          expect(srcs, `${p.key} ${format.width}`).toEqual(
-            content.filter((c) => c.kind === "image").map((c) => (c as { src: string }).src),
-          );
+          const expected = content.filter((c) => c.kind === "image").map((c) => (c as { src: string }).src);
+          // Mosaïques libres (tailles selon le format des photos) : relues dans l'ordre de lecture.
+          if (FREE_ORDER.has(p.layoutId)) expect([...srcs].sort(), p.key).toEqual([...expected].sort());
+          else expect(srcs, `${p.key} ${format.width}`).toEqual(expected);
         }
       }
     }

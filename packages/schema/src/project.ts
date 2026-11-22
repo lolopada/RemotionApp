@@ -113,6 +113,8 @@ export const AudioClipSchema = z.object({
   volume: z.number().min(0).max(2).default(1),
   fadeInFrames: z.number().int().min(0).default(30),
   fadeOutFrames: z.number().int().min(0).default(45),
+  /** Crédit à citer (« Titre » par Artiste, licence…) ; vide pour une musique à soi. */
+  credit: z.string().max(400).default(""),
 });
 export type AudioClip = z.infer<typeof AudioClipSchema>;
 

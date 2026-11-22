@@ -34,6 +34,24 @@ export const isAcceptedExport = (mime: string) => mime in EXPORT_MIME;
 
 export class TooLargeError extends Error {}
 
+/** Écrit un flux dans `file`, sans dépasser `maxBytes` (fichier supprimé en cas d'erreur). */
+async function writeLimited(body: ReadableStream<Uint8Array>, file: string, maxBytes: number): Promise<number> {
+  let size = 0;
+  const counter = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      size += chunk.length;
+      cb(size > maxBytes ? new TooLargeError() : null, chunk);
+    },
+  });
+  try {
+    await pipeline(Readable.fromWeb(body as WebReadableStream), counter, createWriteStream(file));
+  } catch (err) {
+    await rm(file, { force: true });
+    throw err;
+  }
+  return size;
+}
+
 type Row = {
   id: string;
   user_id: string;
@@ -47,6 +65,9 @@ type Row = {
   height: number | null;
   duration_seconds: number | null;
   created_at: string;
+  source_key: string | null;
+  source_url: string | null;
+  credit: string | null;
 };
 
 /**
@@ -56,12 +77,14 @@ type Row = {
 export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
   const q = {
     insert: db.prepare(
-      `INSERT INTO files (id, user_id, kind, name, mime, size, filename, project_id, width, height, duration_seconds, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO files (id, user_id, kind, name, mime, size, filename, project_id, width, height, duration_seconds, created_at,
+                          source_key, source_url, credit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     list: db.prepare("SELECT * FROM files WHERE user_id = ? AND kind = ? ORDER BY created_at DESC"),
     get: db.prepare("SELECT * FROM files WHERE id = ? AND user_id = ?"),
     byFilename: db.prepare("SELECT * FROM files WHERE filename = ?"),
+    bySource: db.prepare("SELECT * FROM files WHERE user_id = ? AND source_key = ?"),
     remove: db.prepare("DELETE FROM files WHERE id = ? AND user_id = ?"),
     rename: db.prepare("UPDATE files SET name = ? WHERE id = ? AND user_id = ?"),
   };
@@ -78,6 +101,8 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
     height: r.height,
     durationSeconds: r.duration_seconds,
     createdAt: r.created_at,
+    credit: r.credit ?? null,
+    sourceUrl: r.source_url ?? null,
   });
 
   function record(
@@ -102,6 +127,9 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
       height: extra.height ?? null,
       duration_seconds: extra.durationSeconds ?? null,
       created_at: new Date().toISOString(),
+      source_key: extra.sourceKey ?? null,
+      source_url: extra.sourceUrl ?? null,
+      credit: extra.credit ?? null,
     };
     q.insert.run(
       row.id,
@@ -116,6 +144,9 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
       row.height,
       row.duration_seconds,
       row.created_at,
+      row.source_key,
+      row.source_url,
+      row.credit,
     );
     return toFile(row);
   }
@@ -125,6 +156,9 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
     width?: number | null;
     height?: number | null;
     durationSeconds?: number | null;
+    sourceKey?: string | null;
+    sourceUrl?: string | null;
+    credit?: string | null;
   }
 
   return {
@@ -143,6 +177,33 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
     },
 
     /**
+     * Média téléchargé depuis un service (musique Jamendo) : écrit au fil de l'eau, plafonné
+     * à `maxBytes`, avec son origine (crédit, page, clé anti-doublon).
+     */
+    async saveDownloaded(
+      userId: string,
+      body: ReadableStream<Uint8Array>,
+      mime: string,
+      maxBytes: number,
+      meta: { name: string } & Extra,
+    ): Promise<StoredFile> {
+      const type = MIME[mime];
+      if (!type) throw new Error(`Type non accepté : ${mime || "inconnu"}`);
+      await mkdir(dir, { recursive: true });
+      const filename = `${newId()}.${type.ext}`;
+      const tmp = path.join(dir, `${filename}.part`);
+      const size = await writeLimited(body, tmp, maxBytes);
+      await rename(tmp, path.join(dir, filename));
+      return record(userId, type.kind, meta.name, mime, size, filename, meta);
+    },
+
+    /** Fichier déjà importé depuis la même source (ex. « jamendo:123 »). */
+    findBySource(userId: string, sourceKey: string): StoredFile | null {
+      const row = q.bySource.get(userId, sourceKey) as Row | undefined;
+      return row ? toFile(row) : null;
+    },
+
+    /**
      * Vidéo exportée, reçue en flux brut et écrite au fil de l'eau :
      * même un gros fichier ne passe jamais entièrement en mémoire.
      */
@@ -158,19 +219,7 @@ export function createFileStore(db: Db, dir: string, publicPrefix = "/files") {
       await mkdir(dir, { recursive: true });
       const filename = `${newId()}.${ext}`;
       const tmp = path.join(dir, `${filename}.part`);
-      let size = 0;
-      const counter = new Transform({
-        transform(chunk: Buffer, _enc, cb) {
-          size += chunk.length;
-          cb(size > maxBytes ? new TooLargeError() : null, chunk);
-        },
-      });
-      try {
-        await pipeline(Readable.fromWeb(body as WebReadableStream), counter, createWriteStream(tmp));
-      } catch (err) {
-        await rm(tmp, { force: true });
-        throw err;
-      }
+      const size = await writeLimited(body, tmp, maxBytes);
       await rename(tmp, path.join(dir, filename));
       return record(userId, "export", meta.name, mime, size, filename, meta);
     },

@@ -7,8 +7,9 @@ import { useEditor } from "./editorStore";
 
 /**
  * Sauvegarde automatique d'un projet ouvert dans l'éditeur :
- *  - chaque modification est copiée tout de suite dans un brouillon local
- *    (localStorage), puis envoyée au serveur après 1 s de calme (5 s max) ;
+ *  - chaque modification est copiée dans un brouillon local (localStorage, au plus
+ *    toutes les 0,4 s : pendant un déplacement à la souris, on n'écrit pas tout le projet à
+ *    chaque mouvement), puis envoyée au serveur après 1 s de calme (5 s max) ;
  *  - en cas d'échec (réseau, serveur arrêté), réessai automatique avec délai
  *    croissant, et au retour du réseau ;
  *  - envoi immédiat quand on quitte l'onglet ou l'éditeur ;
@@ -17,6 +18,8 @@ import { useEditor } from "./editorStore";
  */
 
 const DEBOUNCE_MS = 1000;
+/** Écart minimum entre deux écritures du brouillon local. */
+const DRAFT_MS = 400;
 const MAX_WAIT_MS = 5000;
 const RETRY_DELAYS = [2000, 5000, 10_000, 30_000];
 /** fetch keepalive (envoi à la fermeture de l'onglet) est limité à 64 Ko. */
@@ -52,9 +55,25 @@ function createSaver(projectId: string, initialServerVersion: string) {
   let attempt = 0;
   let stopped = false;
 
-  const writeDraft = (project: Project) =>
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+  const writeDraft = (project: Project) => {
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
     local.set(draftKey(projectId), JSON.stringify({ project, baseUpdatedAt: serverVersion } satisfies Draft));
-  const clearDraft = () => local.remove(draftKey(projectId));
+  };
+  /** Brouillon écrit un peu plus tard, avec l'état du moment (une écriture pour une rafale de modifs). */
+  const writeDraftSoon = () => {
+    if (draftTimer !== undefined) return;
+    draftTimer = setTimeout(() => {
+      draftTimer = undefined;
+      if (dirty) writeDraft(useEditor.getState().project);
+    }, DRAFT_MS);
+  };
+  const clearDraft = () => {
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
+    local.remove(draftKey(projectId));
+  };
 
   const schedule = (delay: number) => {
     clearTimeout(timer);
@@ -91,6 +110,8 @@ function createSaver(projectId: string, initialServerVersion: string) {
   /** Envoie maintenant ce qui n'est pas encore enregistré (attend un envoi en cours). */
   async function flush(opts: { keepalive?: boolean } = {}) {
     clearTimeout(timer);
+    // Brouillon à jour tout de suite (l'onglet peut se fermer avant la fin de l'envoi).
+    if (dirty && draftTimer !== undefined) writeDraft(useEditor.getState().project);
     if (inFlight) await inFlight;
     if (!dirty) return;
     inFlight = send(opts.keepalive ?? false).finally(() => {
@@ -99,8 +120,8 @@ function createSaver(projectId: string, initialServerVersion: string) {
     await inFlight;
   }
 
-  function onChange(project: Project) {
-    writeDraft(project);
+  function onChange(_project: Project) {
+    writeDraftSoon();
     if (!dirty) firstDirtyAt = Date.now();
     dirty = true;
     setSaveStatus("pending");
@@ -116,6 +137,7 @@ function createSaver(projectId: string, initialServerVersion: string) {
     stop: () => {
       stopped = true;
       clearTimeout(timer);
+      clearTimeout(draftTimer);
     },
   };
 }

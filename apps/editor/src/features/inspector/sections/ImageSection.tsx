@@ -3,6 +3,7 @@ import { type ImageLayer, type MaskShape, SHAPES } from "@app/schema";
 import clsx from "clsx";
 import { Crop, FlipHorizontal2, FlipVertical2 } from "lucide-react";
 import { ShapeIcon } from "../../../components/ShapeIcon";
+import { TileImg } from "../../../components/TileImg";
 import { Button, ColorInput, Field, Section, Segmented, Select, Slider, TextInput } from "../../../components/ui";
 import { useEditor } from "../../../store/editorStore";
 import { DropShadowSection } from "./DropShadowSection";
@@ -36,7 +37,7 @@ export function ImageSection({ layer, update }: SectionProps<ImageLayer>) {
       <Section title="Photo">
         {layer.src ? (
           <div className="flex items-center gap-2">
-            <img src={layer.src} alt="" className="size-12 rounded object-cover ring-1 ring-line" />
+            <TileImg src={layer.src} alt="" className="size-12 rounded object-cover ring-1 ring-line" />
             <div className="flex flex-col gap-1">
               <Button size="sm" onClick={() => setCropLayer(layer.id)}>
                 <Crop size={13} /> Recadrer

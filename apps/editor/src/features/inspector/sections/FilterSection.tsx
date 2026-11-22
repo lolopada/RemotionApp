@@ -1,6 +1,7 @@
 import { FILTER_PRESETS, type FilterPreset, photoFilterCss } from "@app/composition";
 import type { ImageLayer } from "@app/schema";
 import clsx from "clsx";
+import { TileImg } from "../../../components/TileImg";
 import { Field, Section, Slider } from "../../../components/ui";
 
 type Filter = ImageLayer["filter"];
@@ -68,12 +69,7 @@ export function FilterSection({
                   style={{ filter: photoFilterCss({ ...f, preset }) }}
                 />
               ) : src ? (
-                <img
-                  src={src}
-                  alt=""
-                  className="size-full object-cover"
-                  style={{ filter: photoFilterCss({ ...f, preset }) }}
-                />
+                <TileImg src={src} alt="" style={{ filter: photoFilterCss({ ...f, preset }) }} />
               ) : (
                 <div
                   className="size-full bg-gradient-to-br from-orange-300 via-pink-400 to-indigo-500"

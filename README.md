@@ -132,6 +132,15 @@ rotation. Coin = proportionnel (Maj : libre), Alt = depuis le centre, rotation a
 les 45° (Maj : pas de 15°). Un texte tiré par un coin change de taille de police. Le
 déplacement s'aimante au centre et aux bords de l'image (Alt : sans aimantation).
 
+**Propositions de musique (Jamendo).** L'onglet Musique propose des morceaux sous licence
+Creative Commons par ambiance (joyeux, calme, émouvant, épique, énergique, romantique, voyage,
+chill, fête, rétro) ou par recherche libre. On peut se limiter aux morceaux sans paroles et
+assez longs pour couvrir la vidéo. ▶ écoute le morceau directement depuis Jamendo, + l'importe
+dans la bibliothèque du compte puis le pose sur la piste. Le crédit de l'artiste (titre, licence,
+lien) suit le morceau : panneau de la musique et fenêtre d'export (« Copier »). Le serveur fait
+l'intermédiaire (`/api/music`, cache de 10 min, clé `JAMENDO_CLIENT_ID` jamais envoyée au
+navigateur) ; sans clé, l'onglet explique comment l'activer.
+
 **Musique et forme d'onde.** Chaque morceau de la piste sous le storyboard affiche sa forme
 d'onde (avec le volume et les fondus). On le **glisse** pour le déplacer et on **tire ses bords**
 pour couper le début ou la fin ; début et fin s'aimantent sur les changements de scène
@@ -155,23 +164,28 @@ Une trentaine de préréglages sont dans l'onglet Fonds, avec aperçu animé au 
 
 ### Nouvelle page et « Changer de mise en page »
 
-Le **+** du storyboard ouvre la fenêtre « Nouvelle page » : on y pose jusqu'à 6 photos ou
+Le **+** du storyboard ouvre la fenêtre « Nouvelle page » : on y pose jusqu'à 10 photos ou
 vidéos (import, glisser-déposer ou bibliothèque du compte) et jusqu'à 3 textes. Le rôle de
 chaque texte est deviné (le premier texte court est le titre, un second court le sous-titre,
 les longs du texte courant) et peut être forcé. Le site propose aussitôt des mises en page,
-jouées en boucle par la composition : une bibliothèque d'une vingtaine de dispositions
-(pleine page, moitié-moitié, médaillon, arche, polaroids, grilles, bandes, mosaïques, une
-grande et des vignettes…) croisées avec 6 styles (fond, habillage des photos, animations
-d'entrée). Elles sont classées selon le contenu : photos peu rognées (ratio de la photo
+jouées en boucle par la composition : une bibliothèque de 78 dispositions (pleine page avec
+titre en haut, en bas, au centre ou en couverture de magazine, moitié-moitié, passe-partout,
+carte postale, photo inclinée, formes — rond, arche, cœur, hexagone, timbre, nuage, bulle,
+étoile —, avant/après, photo dans la photo, polaroids, corde à linge, pellicule, cascade,
+grilles, mosaïque ajustée, colonnes, planche contact, cadre de photos, alvéoles, et une
+douzaine de pages de texte seul) croisées avec 12 styles (fond, habillage, filtre de couleur,
+grain, animations d'entrée : Doux, Net, Cadre blanc, Album, Fond flou, Vivant, Pellicule,
+Noir et blanc, Rayures, Carnet, Damier, Lumineux). Elles sont classées selon le contenu : photos peu rognées (ratio de la photo
 proche de celui du cadre), textes lisibles sans couper de mot. « Autres idées » fait défiler
-les suivantes ; « Page vide » reste possible. La page choisie est une scène normale, aux
+les suivantes (la flèche revient en arrière) et le menu de style montre toutes les
+dispositions dans un seul style ; « Page vide » reste possible. Les propositions sont des images fixes, animées au survol. La page choisie est une scène normale, aux
 couleurs du thème du projet, entièrement modifiable.
 
 **Changer de mise en page** (panneau de la scène) rouvre la même fenêtre avec le contenu de la
 scène (photos, vidéos et textes ; formes et stickers sont laissés de côté) et remplace sa
 disposition en gardant son nom, sa durée et sa transition. Rien n'est recadré automatiquement :
 les photos sont centrées, à ajuster ensuite si besoin. Ajouter une disposition = une entrée
-dans `apps/editor/src/features/layouts/library.ts`.
+dans `apps/editor/src/features/layouts/dispositions/` (textes, une photo, 2–3 photos, 4 et plus).
 
 ### Durée par page
 

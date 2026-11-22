@@ -31,4 +31,9 @@ serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => 
     `Montage v${buildInfo.version} (${buildInfo.commit}) prêt sur http://localhost:${info.port} (données : ${config.dataDir})`,
   );
   if (!config.allowSignup) console.log("Inscriptions fermées (ALLOW_SIGNUP=false).");
+  console.log(
+    config.jamendoClientId
+      ? "Propositions de musique Jamendo : activées."
+      : "Propositions de musique Jamendo : désactivées (JAMENDO_CLIENT_ID absent).",
+  );
 });

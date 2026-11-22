@@ -1,12 +1,12 @@
 import { createImageLayer } from "@app/schema";
 import { useMemo } from "react";
-import { useEditor, useProject } from "../../store/editorStore";
+import { useEditor, useProjectFormat } from "../../store/editorStore";
 import { STICKER_CATEGORIES, STICKERS, stickerUrl } from "../../templates/stickers";
 import { TabHeader } from "./LibraryPanel";
 
 /** Stickers intégrés : un clic les ajoute au centre de la scène (calque photo ajusté dans son cadre). */
 export function StickerGrid() {
-  const project = useProject();
+  const project = useProjectFormat();
   const addLayer = useEditor((s) => s.addLayer);
   const urls = useMemo(() => new Map(STICKERS.map((s) => [s.id, stickerUrl(s)])), []);
   const size = Math.round(Math.min(project.width, project.height) * 0.28);

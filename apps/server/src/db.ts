@@ -91,6 +91,14 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX scene_templates_user ON scene_templates(user_id, created_at DESC);
   `,
+  // 4 — Origine d'un fichier importé d'un service (musique Jamendo) : crédit à citer, page
+  // d'origine, et clé pour ne pas télécharger deux fois le même morceau.
+  `
+  ALTER TABLE files ADD COLUMN source_key TEXT;
+  ALTER TABLE files ADD COLUMN source_url TEXT;
+  ALTER TABLE files ADD COLUMN credit TEXT;
+  CREATE INDEX files_source ON files(user_id, source_key);
+  `,
 ];
 
 export function openDb(file: string): Db {

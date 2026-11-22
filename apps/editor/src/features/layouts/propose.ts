@@ -24,8 +24,36 @@ export interface Proposal {
 
 /** Fond de la page selon le style (la photo floutée a besoin d'une photo, sinon dégradé). */
 function styleBackground(style: LayoutStyle, theme: Theme, media: MediaItem[]): BackgroundInput {
+  const bg = styleBackgroundBase(style, theme, media);
+  return style.grain ? ({ ...bg, grain: style.grain } as BackgroundInput) : bg;
+}
+
+function styleBackgroundBase(style: LayoutStyle, theme: Theme, media: MediaItem[]): BackgroundInput {
   const c = theme.colors;
   switch (style.background) {
+    case "stripes":
+      return {
+        type: "pattern",
+        pattern: "stripes",
+        base: c.background,
+        ink: c.background2,
+        size: 70,
+        thickness: 0.22,
+        angle: 45,
+      };
+    case "checks":
+      return { type: "pattern", pattern: "checks", base: c.background, ink: c.background2, size: 200, thickness: 0.5 };
+    case "grid":
+      return { type: "pattern", pattern: "grid", base: c.background, ink: c.background2, size: 80, thickness: 0.12 };
+    case "spot":
+      return {
+        type: "gradient",
+        kind: "radial",
+        colors: [c.background2, c.background],
+        centerX: 0.22,
+        centerY: 0.18,
+        radius: 1.4,
+      };
     case "solid":
       return { type: "color", color: c.background };
     case "pattern":
@@ -124,14 +152,29 @@ export function buildPage(
   };
 }
 
+/** Liste ordonnée des propositions, construites seulement quand on les affiche. */
+export interface ProposalPlan {
+  /** Nombre total de propositions. */
+  count: number;
+  /** Construit (et garde en mémoire) les propositions `from` à `to` (exclu). */
+  slice: (from: number, to: number) => Proposal[];
+}
+
 /**
- * Toutes les propositions pour ce contenu, des plus adaptées aux moins adaptées.
- * Ordre : on classe les dispositions par note, puis on fait des « tours » : au tour r, chaque
- * disposition reçoit un style différent (décalé selon son rang). La première page de
- * propositions montre donc les meilleures dispositions, chacune avec un style varié ;
- * « Autres idées » fait défiler les tours suivants.
+ * Ordre des propositions pour ce contenu, des plus adaptées aux moins adaptées.
+ * On classe les dispositions par note (une construction chacune), puis on fait des « tours » :
+ * au tour r, chaque disposition reçoit un style différent (décalé selon son rang). La première
+ * page montre donc les meilleures dispositions, chacune avec un style varié ; « Autres idées »
+ * fait défiler les tours suivants. Avec `styleId`, toutes les dispositions dans ce style.
+ * Les pages ne sont construites qu'à la demande : taper un texte reste fluide même avec
+ * 10 photos (près de 1 000 propositions possibles).
  */
-export function proposeAll(content: ContentItem[], format: PageFormat, theme: Theme | null): Proposal[] {
+export function planProposals(
+  content: ContentItem[],
+  format: PageFormat,
+  theme: Theme | null,
+  styleId?: string | null,
+): ProposalPlan {
   const layouts = applicableLayouts(content);
   const S = LAYOUT_STYLES.length;
   // Note d'une disposition = celle de son premier style (les styles changent peu la géométrie).
@@ -147,15 +190,49 @@ export function proposeAll(content: ContentItem[], format: PageFormat, theme: Th
   const good = ranked.filter((r) => (r.best as Proposal).score > -2.5);
   const ordered = good.length > 0 ? [...good, ...ranked.filter((r) => !good.includes(r))] : ranked;
 
-  const out: Proposal[] = [];
-  for (let round = 0; round < S; round++) {
-    ordered.forEach(({ layout }, rank) => {
-      const style = LAYOUT_STYLES[(rank + round) % S] as LayoutStyle;
-      const p = buildPage(layout, style, content, format, theme);
-      if (p) out.push(p);
-    });
+  const pairs: { layout: LayoutDef; style: LayoutStyle }[] = [];
+  const only = styleId ? LAYOUT_STYLES.find((st) => st.id === styleId) : undefined;
+  if (only) {
+    for (const { layout } of ordered) pairs.push({ layout, style: only });
+  } else {
+    for (let round = 0; round < S; round++) {
+      ordered.forEach(({ layout }, rank) => {
+        pairs.push({ layout, style: LAYOUT_STYLES[(rank + round) % S] as LayoutStyle });
+      });
+    }
   }
-  return out;
+  const cache = new Map<number, Proposal>();
+  const at = (i: number) => {
+    let p = cache.get(i);
+    if (!p) {
+      const pair = pairs[i] as (typeof pairs)[number];
+      // Déjà construite pour le classement ?
+      const first = pair.style === LAYOUT_STYLES[0] ? ordered.find((r) => r.layout === pair.layout)?.best : null;
+      p = first ?? (buildPage(pair.layout, pair.style, content, format, theme) as Proposal);
+      cache.set(i, p);
+    }
+    return p;
+  };
+  return {
+    count: pairs.length,
+    slice: (from, to) => {
+      const out: Proposal[] = [];
+      for (let i = Math.max(0, from); i < Math.min(to, pairs.length); i++) out.push(at(i));
+      return out;
+    },
+  };
+}
+
+/** Toutes les propositions (construites d'un coup : pour les tests et les petits contenus). */
+export function proposeAll(
+  content: ContentItem[],
+  format: PageFormat,
+  theme: Theme | null,
+  /** Un seul style (toutes les dispositions dans ce style), sinon styles variés. */
+  styleId?: string | null,
+): Proposal[] {
+  const plan = planProposals(content, format, theme, styleId);
+  return plan.slice(0, plan.count);
 }
 
 /** Une « page » de propositions (6 par défaut) ; `page` fait le tour quand on arrive au bout. */
@@ -166,11 +243,11 @@ export function proposeLayouts(
   page = 0,
   count = 6,
 ): Proposal[] {
-  const all = proposeAll(content, format, theme);
-  if (all.length <= count) return all;
-  const pages = Math.ceil(all.length / count);
+  const plan = planProposals(content, format, theme);
+  if (plan.count <= count) return plan.slice(0, plan.count);
+  const pages = Math.ceil(plan.count / count);
   const start = (page % pages) * count;
-  return all.slice(start, start + count);
+  return plan.slice(start, start + count);
 }
 
 /**

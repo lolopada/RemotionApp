@@ -14,7 +14,7 @@ import {
   TextArea,
   Toggle,
 } from "../../../components/ui";
-import { useProject } from "../../../store/editorStore";
+import { useProjectFormat } from "../../../store/editorStore";
 import type { SectionProps } from "./types";
 
 const WEIGHT_LABELS: Record<number, string> = {
@@ -38,7 +38,7 @@ const TEXT_ANIMATIONS: { value: TextAnimationKind; label: string }[] = [
 ];
 
 export function TextSection({ layer, update }: SectionProps<TextLayer>) {
-  const project = useProject();
+  const project = useProjectFormat();
   const info = getFontInfo(layer.fontFamily);
   const weights = info?.weights ?? [400, 700];
   const italic = layer.fontStyle === "italic";
