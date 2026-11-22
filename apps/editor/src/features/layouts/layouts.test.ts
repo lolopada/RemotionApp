@@ -38,6 +38,14 @@ const inside = (l: Layer, w: number, h: number) => {
   return t.x >= -slack && t.y >= -slack && t.x + t.width <= w + slack && t.y + t.height <= h + slack;
 };
 
+/** Part de la surface d'un calque qui reste dans l'image. */
+const visibleShare = (l: Layer, w: number, h: number) => {
+  const t = l.transform;
+  const vw = Math.max(0, Math.min(w, t.x + t.width) - Math.max(0, t.x));
+  const vh = Math.max(0, Math.min(h, t.y + t.height) - Math.max(0, t.y));
+  return (vw * vh) / (t.width * t.height);
+};
+
 describe("rôles des textes", () => {
   it("premier texte court = titre, second = sous-titre, long = texte", () => {
     const r = resolveRoles([
@@ -154,13 +162,22 @@ describe("propositions", () => {
         const all = proposeAll(content, format, null);
         expect(all.length).toBeGreaterThan(0);
         for (const p of all) {
-          const mediaCount = p.scene.layers.filter((l) => l.type === "image" || l.type === "video").length;
+          // Les stickers (SVG intégrés) sont du décor, pas des photos.
+          const isPhoto = (l: Layer) =>
+            l.type === "video" || (l.type === "image" && !(l.src ?? "").startsWith("data:"));
+          const mediaCount = p.scene.layers.filter(isPhoto).length;
+          const def = LAYOUTS.find((l) => l.id === p.layoutId);
           const bgPhoto = p.scene.background.type === "image" && p.layoutId === "photo-background" ? 1 : 0;
           expect(mediaCount + bgPhoto).toBe(content.filter((c) => c.kind !== "text").length);
           for (const l of p.scene.layers) {
             expect(() => LayerSchema.parse(l)).not.toThrow();
-            if (!l.name.includes("déborde"))
+            if (l.name.includes("déborde")) continue;
+            // Une photo peut sortir volontairement de l'image (hublot…), mais reste bien visible.
+            if (def?.bleedsOff && isPhoto(l)) {
+              expect(visibleShare(l, format.width, format.height), `${p.key} ${l.name}`).toBeGreaterThan(0.33);
+            } else {
               expect(inside(l, format.width, format.height), `${p.key} ${l.name}`).toBe(true);
+            }
           }
           const textCount = p.scene.layers.filter((l) => l.type === "text").length;
           expect(textCount).toBe(content.filter((c) => c.kind === "text").length);
@@ -257,6 +274,23 @@ describe("propositions", () => {
     expect([...counts].sort()).toEqual(LAYOUTS.map((l) => l.id).sort());
   });
 
+  it("les compositions « paysage » (p-…) ne sortent qu'en 16:9 et 21:9", () => {
+    for (const format of Object.values(FORMATS)) {
+      const wide = format.width / format.height > 1.15;
+      for (let n = 0; n <= 10; n++) {
+        const c = [...Array.from({ length: n }, (_, i) => photo(`p${i}`)), text("t", "Titre")];
+        const ids = proposeAll(c, format, null).map((p) => p.layoutId);
+        if (!wide) expect(ids.filter((id) => id.startsWith("p-"))).toEqual([]);
+      }
+    }
+    const cinema = new Set<string>();
+    for (let n = 0; n <= 10; n++) {
+      const c = [...Array.from({ length: n }, (_, i) => photo(`p${i}`)), text("t", "Titre")];
+      for (const p of proposeAll(c, FORMATS.cinema, null)) cinema.add(p.layoutId);
+    }
+    expect(LAYOUTS.filter((l) => l.id.startsWith("p-") && !cinema.has(l.id))).toEqual([]);
+  });
+
   it("durée : plus longue avec du texte, au moins la vidéo", () => {
     expect(suggestedDurationSeconds([], [])).toBe(3);
     expect(suggestedDurationSeconds([], [text("t", "mot ".repeat(30))])).toBeGreaterThan(8);
@@ -327,7 +361,8 @@ describe("changer de mise en page", () => {
             .map((c) => (c as { src: string }).src);
           const expected = content.filter((c) => c.kind === "image").map((c) => (c as { src: string }).src);
           // Mosaïques libres (tailles selon le format des photos) : relues dans l'ordre de lecture.
-          if (FREE_ORDER.has(p.layoutId)) expect([...srcs].sort(), p.key).toEqual([...expected].sort());
+          if (FREE_ORDER.has(p.layoutId) || LAYOUTS.find((l) => l.id === p.layoutId)?.freeOrder)
+            expect([...srcs].sort(), p.key).toEqual([...expected].sort());
           else expect(srcs, `${p.key} ${format.width}`).toEqual(expected);
         }
       }

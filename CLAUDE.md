@@ -114,19 +114,36 @@ Le CSS supporté est limité : https://www.remotion.dev/docs/client-side-renderi
   case, police qui fait tenir une pile de textes **sans couper de mot**), `builder.ts`
   (`PageBuilder` : pose photos/textes/aplats aux couleurs du thème, note, animations ; les
   12 `LAYOUT_STYLES`, avec filtre et grain facultatifs), `library.ts` (`LAYOUTS` = la réunion de
-  `dispositions/text.ts`, `single.ts`, `few.ts`, `many.ts` ; aides communes dans `helpers.ts`),
+  `dispositions/text.ts`, `single.ts`, `few.ts`, `many.ts`, `creative.ts`, `landscape.ts` ; aides dans
+  `helpers.ts`),
   `propose.ts` (classement + « tours » de styles, ou un seul style choisi).
 - Jusqu'à 10 photos (`MAX_MEDIA`). Géométrie dans `fit.ts` : `bestGrid`, `justifiedRows`
   (mosaïque ajustée, presque sans rognage), `masonry`, `cascade`, `ring`. `prior` < 0 pour les
   dispositions « fantaisie » (formes) : elles passent après les classiques à note égale.
 - Une disposition ne pose que des calques existants : rien de nouveau à exporter. Elle ne doit
-  pas sortir de l'image (le test le vérifie pour tous les formats), sauf un décor nommé « … déborde ».
+  pas sortir de l'image (le test le vérifie pour tous les formats), sauf un décor nommé « … déborde »
+  ou les photos d'une disposition `bleedsOff` (au moins un tiers visible).
+- **Compositions créatives** (`creative.ts`, ids `c-…`) : asymétriques, photos penchées /
+  superposées / en pile / en éventail. Outils du `PageBuilder` : `MediaOptions` (`feather` = bord
+  flou, `borderStyle` tirets/pointillés/double, `filter` par photo, `loop`, `shadow`),
+  `TextOptions.look` (`script` = Caveat manuscrit, `caps`, `gradient`, `outline`, `highlight`,
+  `typewriter`), `rotation`, `colors` ; décor : `addTape` (ruban adhésif), `addSticker` (stickers de
+  `templates/stickers.ts`, ignorés par `sceneToContent`), `addPanel` (`dashed`, `gradientTo`,
+  `shadow`). Géométrie libre dans `fit.ts` : `goldenSplit`, `freeMosaic`, `jumbled` (aléatoire à
+  graine fixe : même contenu → même page), `fanArc`. `freeOrder: true` quand les photos ne sont pas
+  posées dans l'ordre de lecture.
+- **Compositions paysage** (`landscape.ts`, ids `p-…`) : enveloppées par `wideOnly` (refusées hors
+  16:9 / 21:9, testé). Elles réutilisent les aides exportées de `creative.ts` (`PAPER`, `INK`, `nth`,
+  `dims`, `noteCard`, `cellsWithText`) ; `rotateAround` place des cases sur une grille penchée
+  (planche contact, mur de polaroids), `link` trace un trait tourné entre deux points (corde,
+  constellation, zigzag : nommé « déborde » car sa boîte non tournée peut sortir de l'image).
+  Une forme `line` est toujours dessinée au milieu de sa boîte, sur toute sa largeur.
 - Les textes posés sur plusieurs lignes n'utilisent jamais `box` (export) : un aplat
   (`addPanel`) est placé derrière.
 - `relayoutScene` remplace calques + fond et garde id, nom (sauf nom automatique), durée,
   transition. Le contenu relu garde l'ordre des photos (la mise en avant, ≥ 2,2× plus grande,
   reste n° 1) : une disposition doit poser ses photos dans l'ordre de lecture (testé), sauf les
-  mosaïques libres listées dans `FREE_ORDER` du test.
+  mosaïques libres listées dans `FREE_ORDER` du test et les dispositions `freeOrder`.
 
 ## Durée par page (`features/storyboard/DurationBar.tsx`)
 

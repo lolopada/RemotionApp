@@ -12,6 +12,7 @@ import {
   type ProjectFormat,
   type Theme,
 } from "@app/schema";
+import { STICKERS, stickerUrl } from "../../templates/stickers";
 import type { MediaItem, TextItem, TextRole } from "./content";
 import {
   aspectMismatch,
@@ -96,6 +97,18 @@ export interface MediaOptions {
   scale?: number;
   /** Couleur du liseré (habillage « border »), blanc par défaut. */
   borderColor?: string;
+  /** Style du liseré : tirets, pointillés ou double trait (habillage « border »). */
+  borderStyle?: "solid" | "dashed" | "dotted" | "double";
+  /** Épaisseur du liseré, en part du petit côté de la photo (défaut 0,025). */
+  borderWidth?: number;
+  /** Bord flou (px) : la photo se fond dans le fond (« Rond flou », « Bord flou »…). */
+  feather?: number;
+  /** Filtre de couleur imposé à cette photo (ex. noir et blanc sauf la photo mise en avant). */
+  filter?: ImageLayer["filter"]["preset"];
+  /** Ombre portée forcée (true) ou supprimée (false). */
+  shadow?: boolean;
+  /** Mouvement continu discret pendant toute la page. */
+  loop?: "float" | "sway";
 }
 
 export interface TextOptions {
@@ -107,6 +120,20 @@ export interface TextOptions {
   maxSize?: number;
   /** Seulement le titre, ou seulement les autres textes (sous-titre, texte). */
   pick?: "title" | "rest";
+  /** Textes légèrement penchés (degrés). */
+  rotation?: number;
+  /**
+   * Allure des textes :
+   *  script     = sous-titre et texte manuscrits (Caveat)
+   *  caps       = titre en capitales espacées
+   *  gradient   = titre en dégradé (couleur d'accent → couleur du titre)
+   *  outline    = titre cerclé de la couleur d'accent
+   *  highlight  = titre surligné par un trait d'accent qui se dessine
+   *  typewriter = texte tapé à la machine
+   */
+  look?: "script" | "caps" | "gradient" | "outline" | "highlight" | "typewriter";
+  /** Couleurs imposées (texte sur une carte claire, par ex.). */
+  colors?: { title: string; text: string };
 }
 
 /** Ce qu'une disposition a besoin de connaître pour se construire. */
@@ -190,14 +217,18 @@ export class PageBuilder {
 
     const small = Math.min(box.width, box.height);
     const framed = ["plain", "rounded", "border", "polaroid", "shadow", "none"].includes(treatment);
+    const feather = treatment === "polaroid" ? 0 : Math.round((opts.feather ?? 0) * this.u);
     const mask = !framed
-      ? { shape: treatment as MaskShape }
+      ? { shape: treatment as MaskShape, feather }
       : treatment === "rounded" || treatment === "shadow"
-        ? { shape: "rounded" as const, radius: Math.round(small * 0.06) }
-        : { shape: "none" as const };
+        ? { shape: "rounded" as const, radius: Math.round(small * 0.06), feather }
+        : { shape: feather > 0 ? ("rect" as const) : ("none" as const), feather };
     const transform = { ...box, rotation: opts.rotation ?? 0 };
     const dropShadow = {
-      enabled: treatment === "shadow" || treatment === "polaroid" || treatment === "border" || !framed,
+      // Un bord flou et une ombre portée ne vont pas ensemble.
+      enabled:
+        opts.shadow ??
+        (feather === 0 && (treatment === "shadow" || treatment === "polaroid" || treatment === "border" || !framed)),
       blur: Math.round(30 * this.u),
       y: Math.round(14 * this.u),
       opacity: 0.4,
@@ -214,10 +245,16 @@ export class PageBuilder {
             frame: treatment === "polaroid" ? "polaroid" : "none",
             border:
               treatment === "border"
-                ? { width: Math.max(4, Math.round(small * 0.025)), color: opts.borderColor ?? "#ffffff" }
+                ? {
+                    width: Math.max(4, Math.round(small * (opts.borderWidth ?? 0.025))),
+                    color: opts.borderColor ?? "#ffffff",
+                    style: opts.borderStyle ?? "solid",
+                  }
                 : {},
             dropShadow,
-            filter: item.filter ?? (this.style.filter ? { preset: this.style.filter } : {}),
+            filter: opts.filter
+              ? { ...(item.filter ?? {}), preset: opts.filter }
+              : (item.filter ?? (this.style.filter ? { preset: this.style.filter } : {})),
           })
         : createVideoLayer({
             name: item.name || "Vidéo",
@@ -226,9 +263,10 @@ export class PageBuilder {
             transform,
             mask,
             dropShadow,
-            filter: this.style.filter ? { preset: this.style.filter } : {},
+            filter: { preset: opts.filter ?? this.style.filter ?? "none" },
             ...(item.keep ?? {}),
           });
+    if (opts.loop) layer.animation.loop = { kind: opts.loop, speed: 0.5, amount: 0.6 };
     this.push(layer, bleed ? "bleed" : "media");
     return box;
   }
@@ -237,14 +275,17 @@ export class PageBuilder {
   addTexts(zone: Rect, opts: TextOptions = {}): Rect | null {
     const texts = this.pickTexts(opts.pick);
     if (texts.length === 0) return null;
-    const { align = "center", valign = "center", onPhoto = false } = opts;
+    const { align = "center", valign = "center", onPhoto = false, look } = opts;
     const u = this.u;
     const maxSize = (opts.maxSize ?? 110) * u;
+    // Manuscrit : sous-titre et texte en Caveat, plus grands (la police est étroite et petite).
+    const script = (t: ResolvedText) => look === "script" && t.role !== "title";
+    const caps = (t: ResolvedText) => look === "caps" && t.role === "title";
     const spec = texts.map((t) => ({
       text: t.text,
-      weight: t.role === "title" ? 1 : t.role === "subtitle" ? 0.42 : 0.4,
-      lineHeight: t.role === "title" ? 1.1 : 1.3,
-      charWidth: t.role === "title" ? 0.66 : t.role === "subtitle" ? 0.68 : 0.56,
+      weight: t.role === "title" ? 1 : script(t) ? 0.6 : t.role === "subtitle" ? 0.42 : 0.4,
+      lineHeight: t.role === "title" ? 1.1 : script(t) ? 1.15 : 1.3,
+      charWidth: caps(t) ? 0.78 : script(t) ? 0.46 : t.role === "title" ? 0.66 : t.role === "subtitle" ? 0.68 : 0.56,
       // En dessous, un texte devient illisible sur un téléphone.
       min: Math.round((t.role === "title" ? 40 : t.role === "subtitle" ? 26 : 30) * u),
     }));
@@ -256,27 +297,47 @@ export class PageBuilder {
     if (valign === "center") y += (zone.height - fit.total) / 2;
     if (valign === "bottom") y += zone.height - fit.total;
     const top = y;
-    const c = this.theme.colors;
+    const c = opts.colors ?? this.theme.colors;
+    const accent = this.theme.colors.accent;
     texts.forEach((t, i) => {
       const fs = fit.fontSizes[i] as number;
       const h = fit.heights[i] as number;
       const heading = t.role === "title";
+      const hand = script(t);
+      const titleColor = onPhoto ? "#ffffff" : c.title;
+      // Petites capitales espacées pour un sous-titre court ; un sous-titre long reste en minuscules.
+      const smallCaps = t.role === "subtitle" && t.text.length <= 32 && !hand;
       const layer = createTextLayer({
         name: heading ? "Titre" : t.role === "subtitle" ? "Sous-titre" : "Texte",
         text: t.text,
-        fontFamily: heading ? this.theme.headingFont : this.theme.bodyFont,
-        fontWeight: heading ? 700 : t.role === "subtitle" ? 600 : 400,
+        fontFamily: hand ? "Caveat" : heading ? this.theme.headingFont : this.theme.bodyFont,
+        fontWeight: hand ? 700 : heading ? (caps(t) ? 800 : 700) : t.role === "subtitle" ? 600 : 400,
         fontSize: fs,
         lineHeight: spec[i]?.lineHeight,
-        // Petites capitales espacées pour un sous-titre court ; un sous-titre long reste en minuscules.
-        letterSpacing: t.role === "subtitle" && t.text.length <= 32 ? Math.round(fs * 0.06) : 0,
-        textTransform: t.role === "subtitle" && t.text.length <= 32 ? "uppercase" : "none",
+        letterSpacing: caps(t) ? Math.round(fs * 0.05) : smallCaps ? Math.round(fs * 0.06) : 0,
+        textTransform: caps(t) || smallCaps ? "uppercase" : "none",
         align,
-        color: onPhoto ? "#ffffff" : heading ? c.title : c.text,
+        color: heading ? titleColor : hand && !onPhoto ? accent : onPhoto ? "#ffffff" : c.text,
         shadow: onPhoto,
         shadowOpacity: 0.55,
+        gradient:
+          heading && look === "gradient" ? { enabled: true, from: accent, to: titleColor, angle: 120 } : undefined,
+        strokeWidth: heading && look === "outline" ? Math.max(2, Math.round(fs * 0.035)) : 0,
+        strokeColor: accent,
+        textAnimation:
+          heading && look === "highlight"
+            ? { kind: "highlight", highlightColor: accent, durationInFrames: Math.round(this.f.fps * 0.9) }
+            : !heading && look === "typewriter"
+              ? {
+                  kind: "typewriter",
+                  durationInFrames: Math.round(this.f.fps * Math.min(2.5, 0.4 + t.text.length / 40)),
+                }
+              : undefined,
         // Un peu de marge en hauteur : l'estimation de la largeur des lettres reste approximative.
-        transform: round(rect(zone.x, y - fs * 0.1, zone.width, h + fs * 0.2)),
+        transform: {
+          ...round(rect(zone.x, y - fs * 0.1, zone.width, h + fs * 0.2)),
+          rotation: opts.rotation ?? 0,
+        },
       });
       this.push(layer, "text");
       y += h + (fit.gaps[i] as number);
@@ -303,20 +364,29 @@ export class PageBuilder {
       /** Contour seul (cadre fin) : épaisseur en px, sans remplissage. */
       outline?: number;
       dotted?: boolean;
+      dashed?: boolean;
+      /** Remplissage en dégradé (de `color` à cette couleur). */
+      gradientTo?: string;
+      gradientAngle?: number;
+      shadow?: boolean;
     } = {},
   ) {
     const layer = createShapeLayer({
       name: opts.name ?? "Fond du texte",
       shape: opts.shape ?? "rect",
       fill: color,
-      fillMode: opts.outline ? "none" : "solid",
+      fillMode: opts.outline ? "none" : opts.gradientTo ? "gradient" : "solid",
+      gradient: opts.gradientTo ? { colors: [color, opts.gradientTo], angle: opts.gradientAngle ?? 135 } : {},
       stroke: opts.outline
         ? {
             enabled: true,
             color,
             width: Math.max(1, Math.round(opts.outline)),
-            style: opts.dotted ? "dotted" : "solid",
+            style: opts.dotted ? "dotted" : opts.dashed ? "dashed" : "solid",
           }
+        : {},
+      dropShadow: opts.shadow
+        ? { enabled: true, blur: Math.round(24 * this.u), y: Math.round(10 * this.u), opacity: 0.35 }
         : {},
       radius: opts.radius ?? Math.round(18 * this.u),
       transform: { ...round(box), opacity: opts.opacity ?? 1, rotation: opts.rotation ?? 0 },
@@ -350,6 +420,34 @@ export class PageBuilder {
       name: "Trait",
       radius: Math.round(Math.min(box.width, box.height) / 2),
     });
+  }
+
+  /**
+   * Ruban adhésif posé en travers d'un coin de photo : bande claire semi-transparente, un peu
+   * penchée. `at` = centre du ruban.
+   */
+  addTape(cx: number, cy: number, length: number, rotation: number) {
+    const h = Math.round(length * 0.32);
+    this.addPanel(rect(cx - length / 2, cy - h / 2, length, h), "#fffaf0", {
+      name: "Ruban adhésif",
+      radius: Math.round(2 * this.u),
+      opacity: 0.62,
+      rotation,
+    });
+  }
+
+  /** Sticker de la bibliothèque (SVG intégré), posé comme une petite image. */
+  addSticker(id: string, box: Rect, rotation = 0, loop?: "float" | "sway") {
+    const sticker = STICKERS.find((s) => s.id === id);
+    if (!sticker) return;
+    const layer = createImageLayer({
+      name: `Sticker ${sticker.label}`,
+      src: stickerUrl(sticker),
+      fit: "contain",
+      transform: { ...round(box), rotation },
+    });
+    if (loop) layer.animation.loop = { kind: loop, speed: 0.6, amount: 0.8 };
+    this.push(layer, "decor");
   }
 
   private push(layer: Layer, role: "media" | "bleed" | "text" | "decor") {
@@ -400,8 +498,11 @@ export class PageBuilder {
         continue;
       }
       if (role === "decor") {
-        a.enter = "fade";
+        // Décor posé après des photos (ruban, sticker) : il arrive avec elles, pas avant.
+        const sticker = layer.type === "image";
+        a.enter = sticker ? "pop" : "fade";
         a.enterDurationInFrames = f(15);
+        if (mediaIndex > 0) a.enterDelayInFrames = f(Math.min(mediaIndex, 4) * 6 + (sticker ? 10 : 4));
         continue;
       }
       if (role === "media") {

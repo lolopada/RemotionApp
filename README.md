@@ -175,7 +175,29 @@ carte postale, photo inclinée, formes — rond, arche, cœur, hexagone, timbre,
 grilles, mosaïque ajustée, colonnes, planche contact, cadre de photos, alvéoles, et une
 douzaine de pages de texte seul) croisées avec 12 styles (fond, habillage, filtre de couleur,
 grain, animations d'entrée : Doux, Net, Cadre blanc, Album, Fond flou, Vivant, Pellicule,
-Noir et blanc, Rayures, Carnet, Damier, Lumineux). Elles sont classées selon le contenu : photos peu rognées (ratio de la photo
+Noir et blanc, Rayures, Carnet, Damier, Lumineux).
+
+S'y ajoutent une vingtaine de **compositions créatives**, volontairement asymétriques : photo
+scotchée avec ruban adhésif, bord flou rêveur, cadre décalé en tirets, titre géant derrière la
+photo, hublot coupé par le bord de l'image, photo posée sur son propre flou, rond flou et
+paillettes, liseré double, deux photos qui se chevauchent, une seule photo en couleur (les autres
+en noir et blanc), escalier penché, arche et bulles, spirale dorée, mosaïque libre, tableau
+d'inspiration (photos en vrac, polaroids, liserés en tirets, carte de papier écrite à la main),
+pile de souvenirs, éventail en arc, vague, photos sur une bande de couleur ou une pellicule
+penchées. Elles utilisent les cadres de l'onglet Éléments (bords flous, médaillons, arches,
+liserés), des stickers et des textes manuscrits, en dégradé, surlignés ou tapés à la machine.
+
+En **paysage (16:9 et cinéma 21:9) seulement**, 37 compositions de plus jouent sur la largeur de
+l'image : titre en biais sur une bande de couleur, titre géant et cercles, billet dentelé, carte
+postale penchée avec timbre, une de magazine, photo et étoile, pile de papiers, cœur flou,
+plein cadre vaporeux, coupe en diagonale, cadre dans le cadre, polaroid épinglé, grand timbre
+oblitéré, photos croisées, arche et médaillon, avant/après en biais, polaroid sur fond flou,
+pellicule verticale, corde en pente avec pinces, cascade, médaillons en orbite, colonnes
+décalées, constellation (médaillons reliés en pointillés), livre ouvert, album scrapbook, rangées
+décalées, rangée en diagonale, mur de polaroids penché, grappe de bulles, grande photo et sa
+pellicule, spirale penchée, zigzag, grand collage avec un petit mot, planche contact posée (la
+photo choisie entourée au crayon) et mur de souvenirs. Elles ne sont jamais proposées en
+portrait, carré ou 4:5. Les propositions sont classées selon le contenu : photos peu rognées (ratio de la photo
 proche de celui du cadre), textes lisibles sans couper de mot. « Autres idées » fait défiler
 les suivantes (la flèche revient en arrière) et le menu de style montre toutes les
 dispositions dans un seul style ; « Page vide » reste possible. Les propositions sont des images fixes, animées au survol. La page choisie est une scène normale, aux
@@ -185,7 +207,8 @@ couleurs du thème du projet, entièrement modifiable.
 scène (photos, vidéos et textes ; formes et stickers sont laissés de côté) et remplace sa
 disposition en gardant son nom, sa durée et sa transition. Rien n'est recadré automatiquement :
 les photos sont centrées, à ajuster ensuite si besoin. Ajouter une disposition = une entrée
-dans `apps/editor/src/features/layouts/dispositions/` (textes, une photo, 2–3 photos, 4 et plus).
+dans `apps/editor/src/features/layouts/dispositions/` (textes, une photo, 2–3 photos, 4 et plus,
+créatives, paysage seulement).
 
 ### Durée par page
 

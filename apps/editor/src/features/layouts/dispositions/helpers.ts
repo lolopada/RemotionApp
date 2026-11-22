@@ -16,6 +16,17 @@ export interface LayoutDef {
   needsText?: boolean;
   /** Bonus de départ (préférence à note égale ; négatif pour les dispositions « fantaisie »). */
   prior?: number;
+  /**
+   * Composition libre (pile, collage, cartes qui se chevauchent…) : les photos ne sont pas
+   * posées dans l'ordre de lecture, « Changer de mise en page » peut donc les relire dans un
+   * autre ordre (le test ne l'exige pas).
+   */
+  freeOrder?: boolean;
+  /**
+   * Des photos peuvent volontairement sortir de l'image (hublot coupé par le bord…) : le test
+   * vérifie seulement qu'au moins un tiers de chacune reste visible.
+   */
+  bleedsOff?: boolean;
   build: (b: PageBuilder) => boolean | undefined;
 }
 

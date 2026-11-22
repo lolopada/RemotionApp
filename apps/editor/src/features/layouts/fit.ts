@@ -333,3 +333,107 @@ export function fitTextStack(
   }
   return { ...m, fits: m.total <= zone.height, scale: base / maxSize };
 }
+
+// ---------------------------------------------------------------- Compositions libres
+
+/**
+ * Spirale dorée : la 1re case prend 62 % de la zone, la suivante 62 % du reste, en tournant
+ * (gauche, haut, droite, bas…). Donne des tailles toutes différentes, sans symétrie.
+ */
+export function goldenSplit(r: Rect, n: number, gap = 0): Rect[] {
+  const cells: Rect[] = [];
+  let rest = r;
+  for (let i = 0; i < n - 1; i++) {
+    const k = 0.62;
+    const far = i % 4 >= 2; // une fois sur deux, la grande case passe de l'autre côté
+    if (rest.width >= rest.height) {
+      const [a, b] = splitX(rest, far ? 1 - k : k, gap);
+      cells.push(far ? b : a);
+      rest = far ? a : b;
+    } else {
+      const [a, b] = splitY(rest, far ? 1 - k : k, gap);
+      cells.push(far ? b : a);
+      rest = far ? a : b;
+    }
+  }
+  cells.push(rest);
+  return cells.slice(0, n);
+}
+
+/**
+ * Mosaïque libre : on coupe toujours la plus grande case, dans son sens le plus long, avec des
+ * proportions qui varient (jamais 50/50). Renvoie les cases de la plus grande à la plus petite.
+ */
+export function freeMosaic(r: Rect, n: number, gap = 0): Rect[] {
+  const ratios = [0.6, 0.42, 0.56, 0.36, 0.64, 0.46, 0.58, 0.4, 0.62];
+  let pieces: Rect[] = [r];
+  for (let i = 0; pieces.length < n; i++) {
+    pieces.sort((a, b) => b.width * b.height - a.width * a.height);
+    const [big, ...others] = pieces as [Rect, ...Rect[]];
+    const k = ratios[i % ratios.length] as number;
+    const [a, b] = big.width >= big.height * 0.9 ? splitX(big, k, gap) : splitY(big, k, gap);
+    pieces = [...others, a, b];
+  }
+  return pieces.sort((a, b) => b.width * b.height - a.width * a.height);
+}
+
+/** Petit générateur pseudo-aléatoire à graine fixe : même contenu → même composition. */
+export function seeded(seed: number) {
+  let s = seed % 2147483647 || 1;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+/**
+ * Cases d'une grille « bousculée » : tailles, décalages et inclinaisons qui varient d'une case à
+ * l'autre (collage fait à la main). La première case (photo mise en avant) est un peu plus grande.
+ */
+export function jumbled(r: Rect, n: number, gap: number, aspect: number): { box: Rect; rotation: number }[] {
+  const rand = seeded(n * 7919 + Math.round(r.width));
+  return bestGrid(r, n, gap, aspect).map((c, i) => {
+    const scale = i === 0 ? 1.12 : 0.8 + rand() * 0.22;
+    const w = c.width * scale;
+    const h = c.height * scale;
+    const dx = (rand() - 0.5) * c.width * 0.14;
+    const dy = (rand() - 0.5) * c.height * 0.14;
+    let x = c.x + (c.width - w) / 2 + dx;
+    let y = c.y + (c.height - h) / 2 + dy;
+    // On reste dans la zone.
+    x = Math.max(r.x, Math.min(r.x + r.width - w, x));
+    y = Math.max(r.y, Math.min(r.y + r.height - h, y));
+    const rotation = Math.round((rand() - 0.5) * 14);
+    return { box: rect(x, y, w, h), rotation };
+  });
+}
+
+/**
+ * Cartes en éventail le long d'un arc (pivot sous la zone) : positions et inclinaisons. Les
+ * cartes sont aussi grandes que possible, réduites si l'arc ne tient pas dans la zone.
+ */
+export function fanArc(r: Rect, aspects: number[]): { box: Rect; rotation: number }[] {
+  const n = aspects.length;
+  const span = Math.min(44, 11 * (n - 1)); // ouverture totale, en degrés
+  // Carte polaroid : un peu plus haute que la photo (bas plus large).
+  const cardAspect = Math.min(1.25, Math.max(0.72, (aspects.reduce((x, y) => x + y, 0) / n) * 0.82));
+  let h = r.height * 0.86;
+  let w = h * cardAspect;
+  let R = h * 2.1;
+  const half = (span / 2) * (Math.PI / 180);
+  const width = () => 2 * R * Math.sin(half) + w;
+  const height = () => R * (1 - Math.cos(half)) + h;
+  const k = Math.min(1, r.width / width(), r.height / height());
+  h *= k;
+  w *= k;
+  R *= k;
+  const cx = r.x + r.width / 2;
+  const top = r.y + (r.height - height()) / 2;
+  return Array.from({ length: n }, (_, i) => {
+    const deg = n === 1 ? 0 : -span / 2 + (span * i) / (n - 1);
+    const a = (deg * Math.PI) / 180;
+    const x = cx + R * Math.sin(a);
+    const y = top + R * (1 - Math.cos(a));
+    return { box: rect(x - w / 2, y, w, h), rotation: Math.round(deg) };
+  });
+}
